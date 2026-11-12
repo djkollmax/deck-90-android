@@ -17,3 +17,5 @@
   three VU faces and three spectrum colours, chosen by touching the meter standing up. The spectrum shows 14 wide
   bars (each the louder of two measured bands) with taller segments. The faces and scales are
   drawn once to a cached canvas, each frame only the needles and bars.
+- Tablets: the stacked screen either way up (only a phone lying down shows the face alone), the face at most 30% of
+  the height when wide, the memories in two rows of six, bigger letters and keys.

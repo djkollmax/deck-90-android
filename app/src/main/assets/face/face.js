@@ -150,7 +150,8 @@ setInterval(read, 250); read();
 // top of the scale) and ESPECTRO (28 bands, 40 Hz – 16 kHz, +3 dB per octave so music sits level, peaks held a moment)
 const VIEWS = ['radio', 'vu', 'spec'], VIEW_NAMES = { radio: 'RADIO', vu: 'VU', spec: 'ESPECTRO' };
 const cv = el('mCanvas'), cx = cv.getContext('2d', { alpha: false });
-const wide = matchMedia('(min-aspect-ratio: 3/2)');
+// a phone lying down: only the face, the meters full screen. A tablet lying down is tall enough for the keys
+const wide = matchMedia('(min-aspect-ratio: 3/2) and (max-height: 560px)');
 const staticLayer = document.createElement('canvas');
 const staticContext = staticLayer.getContext('2d', { alpha: false });
 let artwork = null, dirty = true;
@@ -277,7 +278,7 @@ function buildArtwork(d) {
   g.fillRect(0, 0, width, height);
   if (mode === 'spec') return { d, w, h, ...spectrumArtwork(g, width, height) };
   const skin = VU_SKINS[skinIndex(look.vuSkin, VU_SKINS)];
-  const side = wide.matches;
+  const side = width / height >= 1.9;                               // two faces side by side when they fit
   const gap = Math.min(12, Math.min(width, height) * .04);
   const mw = side ? (width - gap) / 2 : width;
   const mh = side ? height : (height - gap) / 2;
@@ -414,7 +415,8 @@ function spectrumArtwork(g, w, h) {
   glass.addColorStop(1, '#090e0c');
   g.fillStyle = glass;
   g.fillRect(5, 5, w - 10, h - 10);
-  const x0 = 12, y0 = 29, y1 = h - 24, plotW = w - 24, bw = plotW / BARS;
+  const fs = Math.max(9, Math.min(15, Math.round(Math.min(w, h) / 40)));   // letters grow on a tablet
+  const x0 = 12, y0 = 16 + fs * 1.4, y1 = h - 12 - fs * 1.3, plotW = w - 24, bw = plotW / BARS;
   const rows = Math.max(10, Math.min(24, Math.round((y1 - y0) / 9)));
   const sh = (y1 - y0) / rows, gap = Math.max(2, bw * .14);
   const columns = Array.from({ length: BARS }, (_, k) => x0 + k * bw + gap / 2);
@@ -427,19 +429,19 @@ function spectrumArtwork(g, w, h) {
     g.fillStyle = skin.colors[zone] + '16';
     for (const x of columns) g.fillRect(x, y, ledW, ledH);
   }
-  g.font = '700 9px Consolas, monospace';
+  g.font = '700 ' + fs + 'px Consolas, monospace';
   g.textBaseline = 'middle';
   g.fillStyle = '#a4beb0';
   g.textAlign = 'left';
-  g.fillText('ESPECTRO / ' + skin.name, x0, 16);
+  g.fillText('ESPECTRO / ' + skin.name, x0, 8 + fs * .9);
   g.textAlign = 'right';
-  g.fillText(BARS + ' BANDAS', w - x0, 16);
+  g.fillText(BARS + ' BANDAS', w - x0, 8 + fs * .9);
   g.fillStyle = '#9aa991';
   g.textAlign = 'center';
   for (const [f, text] of SPEC_LABELS) {
     const half = g.measureText(text).width / 2;
     const x = x0 + Math.log(f / 40) / Math.log(400) * plotW;
-    g.fillText(text, Math.max(x0 + half, Math.min(w - x0 - half, x)), h - 13);
+    g.fillText(text, Math.max(x0 + half, Math.min(w - x0 - half, x)), h - 6 - fs * .7);
   }
   return { skin, columns, segments, rows, ledW, ledH };
 }
