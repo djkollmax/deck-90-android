@@ -18,4 +18,5 @@
   bars (each the louder of two measured bands) with taller segments. The faces and scales are
   drawn once to a cached canvas, each frame only the needles and bars.
 - Tablets: the stacked screen either way up (only a phone lying down shows the face alone), the face at most 30% of
-  the height when wide, the memories in two rows of six, bigger letters and keys.
+  the height when wide, the memories in two rows of six, bigger letters and keys. Lying down a tablet adds
+  ESTÉREO, the face alone as big as it fits (the display's tap goes RADIO → VU → ESPECTRO → ESTÉREO).

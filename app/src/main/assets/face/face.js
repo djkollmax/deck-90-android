@@ -148,10 +148,13 @@ setInterval(read, 250); read();
 // ═══ the meters: the sound the player sends to the speakers (Levels.kt). The stereo's own around its loudness, as
 // the PC's stereo does; VU (RMS with a needle's swing, 0 VU a little over the station's own level, PEAK near the
 // top of the scale) and ESPECTRO (28 bands, 40 Hz – 16 kHz, +3 dB per octave so music sits level, peaks held a moment)
-const VIEWS = ['radio', 'vu', 'spec'], VIEW_NAMES = { radio: 'RADIO', vu: 'VU', spec: 'ESPECTRO' };
+const VIEWS = ['radio', 'vu', 'spec', 'stereo'], VIEW_NAMES = { radio: 'RADIO', vu: 'VU', spec: 'ESPECTRO', stereo: 'ESTÉREO' };
 const cv = el('mCanvas'), cx = cv.getContext('2d', { alpha: false });
 // a phone lying down: only the face, the meters full screen. A tablet lying down is tall enough for the keys
 const wide = matchMedia('(min-aspect-ratio: 3/2) and (max-height: 560px)');
+// a tablet lying down also has ESTÉREO: the face alone, as big as it fits (a phone lying down already shows it so)
+const roomy = matchMedia('(min-aspect-ratio: 1/1) and (min-height: 561px)');
+const views = () => roomy.matches && !wide.matches ? VIEWS : VIEWS.slice(0, 3);
 const staticLayer = document.createElement('canvas');
 const staticContext = staticLayer.getContext('2d', { alpha: false });
 let artwork = null, dirty = true;
@@ -180,7 +183,7 @@ const sizeObserver = new ResizeObserver(() => { dirty = true; });
 sizeObserver.observe(cv);
 let mode = 'radio';
 function viewSet(v, quiet) {
-  mode = VIEWS.includes(v) ? v : 'radio'; look.view = mode; lookApply();
+  mode = views().includes(v) ? v : 'radio'; look.view = mode; lookApply();
   document.body.dataset.view = mode;
   dirty = true;
   el('padViews').querySelectorAll('button').forEach(button => {
@@ -189,10 +192,12 @@ function viewSet(v, quiet) {
     button.setAttribute('aria-pressed', String(selected));
   });
   meterLabel();
+  if (!quiet && mode === 'stereo') toast('ESTÉREO · tocá el display para volver');
   if (!quiet && wide.matches)
     toast(mode === 'radio' ? 'RADIO' : VIEW_NAMES[mode] + ' · tocá la pantalla para ' + (mode === 'vu' ? 'el espectro' : 'volver a la radio'));
 }
-function viewNext() { viewSet(VIEWS[(VIEWS.indexOf(mode) + 1) % VIEWS.length]); }
+function viewNext() { const list = views(); viewSet(list[(list.indexOf(mode) + 1) % list.length]); }
+[wide, roomy].forEach(q => q.addEventListener('change', () => { if (!views().includes(mode)) viewSet('radio', true); }));
 function meterLabel() {
   cv.setAttribute('aria-label', wide.matches ? 'Pasar a la vista siguiente' : 'Cambiar diseño del medidor');
 }

@@ -96,6 +96,7 @@ html, body {
 .pad-bands { grid-template-columns: repeat(7, minmax(0, 1fr)); }
 .pad-mems { grid-template: repeat(3, minmax(44px, 1fr)) / repeat(4, minmax(0, 1fr)); flex: 1; min-height: 0; }
 .pad-views { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.pad-views [data-v=stereo] { display: none; }
 .pad-row { grid-template-columns: 1fr 1.35fr 1fr 1fr 1fr; }
 .pad-bands button { color: #c3dce0; font: 700 11px/1 var(--mono); letter-spacing: 0; }
 .pad button.on {
@@ -139,9 +140,15 @@ body:is([data-view=vu], [data-view=spec]) :is(.pad-bands, .pad-mems) { display: 
   }
 }
 /* wide below the face (a tablet lying down): the twelve memories in two rows of six */
-@media (min-aspect-ratio: 1/1) {
+@media (min-aspect-ratio: 1/1) and (min-height: 561px) {
   .pad-mems { grid-template: repeat(2, minmax(44px, 1fr)) / repeat(6, minmax(0, 1fr)); }
   .stereo .st-face { width: min(100%, 30vh * 3.7124); }           /* the face leaves room for the keys */
+  .pad-views { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .pad-views [data-v=stereo] { display: block; }
+  /* ESTÉREO: the face alone, as big as the screen allows */
+  body[data-view=stereo] :is(.now, .pad) { display: none; }
+  body[data-view=stereo] .stereo { justify-content: center; }
+  body[data-view=stereo] .stereo .st-face { width: min(100%, (100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom)) * 3.7124); }
 }
 /* a tablet: bigger letters and keys */
 @media (min-width: 700px) and (min-height: 700px) {
