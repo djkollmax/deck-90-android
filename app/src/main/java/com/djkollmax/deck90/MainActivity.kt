@@ -35,8 +35,8 @@ import org.json.JSONObject
 //  THE PHONE: the car stereo's front (the same face and display as Deck 90 on the PC: assets/face), working the
 //  radio through the player's session. Its keys: SEL play/pause, BAND the next band (held: A.MEM, then a number
 //  keeps the station there), 1–6 the memories (held 7–12), ◀◀ ▶▶ the band's stations, SCAN 8 s of each, VOL ▲ ▼
-//  and ATT the phone's volume, DISP the station or its song. The page asks for the state (state()) and the meters
-//  (levels()) and sends the keys (key()).
+//  and ATT the phone's volume, DISP the station or its song. The page asks for the state (state()), the meters
+//  (levels(), spectrum()) and sends the keys (key()).
 // ═══════════════════════════════════════
 @UnstableApi
 class MainActivity : AppCompatActivity() {
@@ -123,6 +123,7 @@ class MainActivity : AppCompatActivity() {
             .put("name", line).put("station", name).put("song", song)
             .put("playing", playing).put("mono", band == "AM").put("quality", quality(c))
             .put("memo", System.currentTimeMillis() < memo).put("scan", scanning)
+            .put("memories", org.json.JSONArray(store.memories(band).map { it?.name ?: "" }))
             .toString()
     }
 
@@ -172,6 +173,14 @@ class MainActivity : AppCompatActivity() {
                     if (now != null) { store.keep(store.band, n, now); toast("GUARDADA EN " + Bands.label(store.band) + " · $n"); tune(store.band, n) }
                 } else tune(store.band, n)
             }
+            // the big keys standing up: a band by name, a memory 1–12, a memory held keeps the one playing there
+            k.startsWith("band:") -> k.removePrefix("band:").takeIf { it in Bands.order }?.let { b -> tune(b, 1); toast("BANDA " + Bands.label(b)) }
+            Regex("^mem(\\d{1,2})$").matches(k) -> tune(store.band, k.removePrefix("mem").toInt().coerceIn(1, Bands.SLOTS))
+            Regex("^keep(\\d{1,2})$").matches(k) -> {
+                val n = k.removePrefix("keep").toInt().coerceIn(1, Bands.SLOTS)
+                val now = store.station(store.band, store.slot)
+                if (now != null) { store.keep(store.band, n, now); store.slot = n; toast("GUARDADA EN " + Bands.label(store.band) + " · $n") }
+            }
             k == "next" || k == "prev" -> c?.let { if (k == "next") it.seekToNextMediaItem() else it.seekToPreviousMediaItem(); it.play() }
             k == "scan" -> {
                 scanning = !scanning
@@ -199,7 +208,8 @@ class MainActivity : AppCompatActivity() {
     // what the page may ask: called on the page's own thread
     private inner class Bridge {
         @JavascriptInterface fun state(): String = state
-        @JavascriptInterface fun levels(): String { val (l, r) = Levels.now(); return "$l,$r" }
+        @JavascriptInterface fun levels(): String = Levels.now()
+        @JavascriptInterface fun spectrum(): String = Levels.spectrumNow()
         @JavascriptInterface fun key(k: String, hold: Boolean) { main.post { this@MainActivity.key(k, hold) } }
         @JavascriptInterface fun version(): String = BuildConfigInfo.version
     }
