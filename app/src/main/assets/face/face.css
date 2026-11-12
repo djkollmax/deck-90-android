@@ -1,0 +1,17 @@
+/* The phone: the car stereo's front as wide as the screen; lying down it fills it, standing up the station and its
+   song big under it */
+html, body { margin: 0; height: 100%; background: #000; color: #c9c3ad; font-family: Arial, Helvetica, sans-serif;
+  -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; overflow: hidden; }
+.stereo { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 4vh; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); box-sizing: border-box; }
+.stereo .st-face { width: min(100%, calc(100dvh * 2001 / 539)); touch-action: manipulation; }
+.now { width: 92%; text-align: center; display: grid; gap: 1.2vh; }
+.now-band { font: 700 13px/1 Consolas, 'Courier New', monospace; letter-spacing: 3px; color: #7ff6e6; opacity: .8; }
+.now-name { font-size: 26px; font-weight: 700; color: #f1ead2; letter-spacing: .5px; }
+.now-song { font-size: 17px; color: #c9c3ad; min-height: 1.3em; }
+.now-q { font: 12px/1 Consolas, 'Courier New', monospace; letter-spacing: 2px; color: #8a8572; }
+.now-q.hifi { color: #ffd166; }
+@media (min-aspect-ratio: 3/2) { .now { display: none; } .stereo { gap: 0; } }
+#toast { position: fixed; left: 50%; bottom: 7vh; transform: translateX(-50%); max-width: 86vw; padding: 10px 16px; border-radius: 8px;
+  background: rgba(10, 14, 16, .92); border: 1px solid rgba(127, 246, 230, .25); color: #e8f7f2; font-size: 14px; text-align: center;
+  opacity: 0; transition: opacity .25s; pointer-events: none; }
+#toast.show { opacity: 1; }

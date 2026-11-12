@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- a cassette-ish "90" in VFD aqua on black -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#0B0F12" android:pathData="M24,34h60a6,6 0 0 1 6,6v28a6,6 0 0 1 -6,6h-60a6,6 0 0 1 -6,-6v-28a6,6 0 0 1 6,-6z" />
+    <path android:strokeColor="#7FF6E6" android:strokeWidth="3" android:fillColor="#00000000"
+        android:pathData="M24,34h60a6,6 0 0 1 6,6v28a6,6 0 0 1 -6,6h-60a6,6 0 0 1 -6,-6v-28a6,6 0 0 1 6,-6z" />
+    <path android:fillColor="#7FF6E6" android:pathData="M38,50m-7,0a7,7 0 1 0 14,0a7,7 0 1 0 -14,0M70,50m-7,0a7,7 0 1 0 14,0a7,7 0 1 0 -14,0" />
+    <path android:fillColor="#0B0F12" android:pathData="M38,50m-3,0a3,3 0 1 0 6,0a3,3 0 1 0 -6,0M70,50m-3,0a3,3 0 1 0 6,0a3,3 0 1 0 -6,0" />
+    <path android:fillColor="#7FF6E6" android:pathData="M34,64h40v4h-40z" />
+</vector>

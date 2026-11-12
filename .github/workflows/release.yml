@@ -1,0 +1,75 @@
+name: release
+
+# Every push to main: the unit tests and the APK. When version.txt names a version with no release yet, the APK is
+# signed with the app's key (the repository's secrets) and published as that release, where Obtainium finds it.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      new: ${{ steps.v.outputs.new }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Version
+        id: v
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v=$(tr -d '[:space:]' < version.txt)
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          if gh release view "v$v" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then echo "new=false" >> "$GITHUB_OUTPUT"; else echo "new=true" >> "$GITHUB_OUTPUT"; fi
+      - name: Signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.DECK90_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/deck90.jks"; echo "DECK90_KEYSTORE=$RUNNER_TEMP/deck90.jks" >> "$GITHUB_ENV"; fi
+          # a release signed with any other key couldn't update the one installed: none is published without it
+          if [ -z "$KEYSTORE_B64" ] && [ "${{ steps.v.outputs.new }}" = "true" ]; then echo "::error::No signing key in the secrets (DECK90_KEYSTORE_B64): not publishing"; exit 1; fi
+      - name: Tests and APK
+        env:
+          DECK90_KEYSTORE_PASSWORD: ${{ secrets.DECK90_KEYSTORE_PASSWORD }}
+          DECK90_KEY_ALIAS: ${{ secrets.DECK90_KEY_ALIAS }}
+          DECK90_KEY_PASSWORD: ${{ secrets.DECK90_KEY_PASSWORD }}
+        run: ./gradlew --no-daemon testDebugUnitTest assembleRelease
+      - name: Check the signature
+        run: |
+          apk=app/build/outputs/apk/release/app-release.apk
+          "$ANDROID_HOME"/build-tools/*/apksigner verify --print-certs "$apk" | head -3
+          mkdir -p out && cp "$apk" "out/deck-90-android-${{ steps.v.outputs.version }}.apk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apk
+          path: out/*.apk
+
+  release:
+    needs: build
+    if: needs.build.outputs.new == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: apk
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          V: ${{ needs.build.outputs.version }}
+        run: |
+          gh release create "v$V" -R "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "Deck 90 para Android $V" \
+            --notes "Deck 90 para Android $V. Se instala y se actualiza con Obtainium (github.com/djkollmax/deck-90-android)." \
+            "deck-90-android-$V.apk"
