@@ -14,5 +14,6 @@
   needles from each channel's RMS around the station's own level, with PEAK, and a 28-band analyzer (2048-point
   FFT in Levels.kt, +3 dB per octave, peaks held).
 - The phone's screen redesigned as 90s hi-fi gear: brushed metal, molded keys, a recessed glass for the station;
-  three VU faces and three spectrum colours, chosen by touching the meter standing up. The faces and scales are
+  three VU faces and three spectrum colours, chosen by touching the meter standing up. The spectrum shows 14 wide
+  bars (each the louder of two measured bands) with taller segments. The faces and scales are
   drawn once to a cached canvas, each frame only the needles and bars.

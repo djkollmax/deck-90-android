@@ -207,7 +207,8 @@ viewSet(look.view, true);
 const db = x => x > 0 ? 20 * Math.log10(x) : -90;
 let avg = -24, at = 0;
 const vu = { l: -20, r: -20, ref: -22, peakL: 0, peakR: 0 };
-const SB = 28, sp = { bar: new Float32Array(SB), peak: new Float32Array(SB), hold: new Float32Array(SB), top: -24 };
+const SB = 28, BARS = 14;                                          // measured in 28 bands, shown as 14 wide bars (each the louder of two)
+const sp = { bar: new Float32Array(BARS), peak: new Float32Array(BARS), hold: new Float32Array(BARS), top: -24 };
 const fc = k => 40 * Math.pow(400, (k + .5) / SB);                 // a band's middle: 40 Hz × 400^…, up to 16 kHz
 function frame(now) {
   requestAnimationFrame(frame);
@@ -250,10 +251,11 @@ function vuFrame(rl, rr, pl, pr, dt, W, H) {
 const SPEC_LABELS = [[63, '63'], [125, '125'], [250, '250'], [500, '500'], [1000, '1k'], [2000, '2k'], [4000, '4k'], [8000, '8k'], [16000, '16k']];
 function specFrame(str, dt, W, H) {
   const vals = str ? str.split(',').map(Number) : [];
-  const tilt = vals.length === SB ? vals.map((v, k) => v + 3 * Math.log2(fc(k) / 1000)) : null;
+  const fine = vals.length === SB ? vals.map((v, k) => v + 3 * Math.log2(fc(k) / 1000)) : null;
+  const tilt = fine && Array.from({ length: BARS }, (_, j) => Math.max(fine[2 * j], fine[2 * j + 1]));
   if (tilt) { const mx = Math.max(...tilt); if (mx > -80) sp.top += (Math.min(0, mx + 3) - sp.top) * (1 - Math.exp(-dt / 3000)); }
   const RANGE = 48, fall = dt / 1000 * 1.4;
-  for (let k = 0; k < SB; k++) {
+  for (let k = 0; k < BARS; k++) {
     const t = tilt ? Math.max(0, Math.min(1, (tilt[k] - (sp.top - RANGE)) / RANGE)) : 0;
     sp.bar[k] = t > sp.bar[k] ? t : Math.max(t, sp.bar[k] - fall);
     if (sp.bar[k] >= sp.peak[k]) { sp.peak[k] = sp.bar[k]; sp.hold[k] = 700; }
@@ -412,10 +414,10 @@ function spectrumArtwork(g, w, h) {
   glass.addColorStop(1, '#090e0c');
   g.fillStyle = glass;
   g.fillRect(5, 5, w - 10, h - 10);
-  const x0 = 12, y0 = 29, y1 = h - 24, plotW = w - 24, bw = plotW / SB;
-  const rows = Math.max(10, Math.min(32, Math.round((y1 - y0) / 5)));
-  const sh = (y1 - y0) / rows, gap = Math.max(1.4, bw * .19);
-  const columns = Array.from({ length: SB }, (_, k) => x0 + k * bw + gap / 2);
+  const x0 = 12, y0 = 29, y1 = h - 24, plotW = w - 24, bw = plotW / BARS;
+  const rows = Math.max(10, Math.min(24, Math.round((y1 - y0) / 9)));
+  const sh = (y1 - y0) / rows, gap = Math.max(2, bw * .14);
+  const columns = Array.from({ length: BARS }, (_, k) => x0 + k * bw + gap / 2);
   const segments = Array.from({ length: rows }, (_, i) => ({
     y: y1 - (i + 1) * sh + sh * .12,
     zone: i >= rows * .88 ? 2 : i >= rows * .7 ? 1 : 0
@@ -431,7 +433,7 @@ function spectrumArtwork(g, w, h) {
   g.textAlign = 'left';
   g.fillText('ESPECTRO / ' + skin.name, x0, 16);
   g.textAlign = 'right';
-  g.fillText(SB + ' BANDAS', w - x0, 16);
+  g.fillText(BARS + ' BANDAS', w - x0, 16);
   g.fillStyle = '#9aa991';
   g.textAlign = 'center';
   for (const [f, text] of SPEC_LABELS) {
@@ -448,7 +450,7 @@ function drawSpectrum({ d, skin, columns, segments, rows, ledW, ledH }) {
   const lit = new Path2D(), middle = new Path2D(), hot = new Path2D();
   const zones = [lit, middle, hot];
   const peaks = new Path2D();
-  for (let k = 0; k < SB; k++) {
+  for (let k = 0; k < BARS; k++) {
     const count = Math.round(sp.bar[k] * rows);
     const pk = Math.min(rows - 1, Math.round(sp.peak[k] * rows) - 1);
     const x = columns[k];
@@ -456,7 +458,7 @@ function drawSpectrum({ d, skin, columns, segments, rows, ledW, ledH }) {
       const { y, zone } = segments[i];
       zones[zone].rect(x, y, ledW, ledH);
     }
-    if (pk > 0) peaks.rect(x, segments[pk].y, ledW, Math.min(ledH, 1.6));
+    if (pk > 0) peaks.rect(x, segments[pk].y, ledW, Math.min(ledH, 3));
   }
   for (let i = 0; i < zones.length; i++) {
     cx.fillStyle = skin.colors[i];
