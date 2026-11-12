@@ -6,8 +6,11 @@ La radio de [Deck 90](https://github.com/djkollmax/deck-90) en el celular y en e
 - **En el celular**: el frente del estéreo, con las mismas teclas que en la PC. SEL pone pausa o vuelve a sonar.
   BAND pasa de banda; mantenida, guarda la que suena (A.MEM y después un número). Los números 1 a 6 son las
   memorias, y mantenidos, de la 7 a la 12. ◀◀ ▶▶ pasan de radio dentro de la banda. SCAN prueba cada una 8
-  segundos. VOL y ATT manejan el volumen del celular, DISP muestra la radio sola o con el tema, y SDM y HDB cambian
-  el color y el brillo del display. Acostado se ve el frente entero; parado, además, la radio y el tema en grande,
+  segundos; mantenido, abre la búsqueda de radios del mundo (por nombre y país; la que tocás suena, y los números
+  de abajo la guardan). VOL ▲ sube de a un paso y ▼ de a tres, ATT silencia, y el volumen se ve grande en el
+  display. DISP cambia lo que muestra: NORMAL, HORA, TEMPERATURA (Quilmes), HORA Y TEMPERATURA y TIEMPO. SDM
+  recorre los 36 colores y looks del display de la PC (mantenido, el anterior), con los que cambian el frente
+  entero, y HDB sus cuatro brillos. PWR lo apaga y lo prende. Acostado se ve el frente entero; parado, además, la radio y el tema en grande,
   las bandas y las doce memorias como teclas grandes (una memoria mantenida guarda ahí la que suena).
 - **En la tablet**: lo mismo que en el celular parado, en cualquier posición: acostada, el frente arriba y las
   memorias en dos filas de seis, con letras y teclas más grandes. Acostada suma **ESTÉREO**: el frente solo, lo

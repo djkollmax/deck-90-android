@@ -58,7 +58,8 @@ class RadioService : MediaLibraryService() {
             .build()
         player.addListener(object : Player.Listener {
             override fun onMediaItemTransition(item: MediaItem?, reason: Int) {
-                Store.parse(item?.mediaId)?.let { (b, s) -> store.band = b; store.slot = s }
+                if (item?.mediaId == Store.TUNED) store.onTuned = true
+                else Store.parse(item?.mediaId)?.let { (b, s) -> store.band = b; store.slot = s; store.onTuned = false }
                 Now.song = ""; Now.changed()
             }
             override fun onMetadata(metadata: Metadata) {
@@ -71,8 +72,7 @@ class RadioService : MediaLibraryService() {
             override fun onPlayerError(error: PlaybackException) {
                 // the address stopped answering: forgotten, and the station asked of Radio Browser once more
                 val item = player.currentMediaItem ?: return
-                val (b, s) = Store.parse(item.mediaId) ?: return
-                val st = store.station(b, s) ?: return
+                val st = (if (item.mediaId == Store.TUNED) store.tuned else Store.parse(item.mediaId)?.let { (b, s) -> store.station(b, s) }) ?: return
                 store.resolvedSet(st, null)
                 if (retried != item.mediaId) { retried = item.mediaId; Resolver.fail(st); player.prepare(); player.play() }
                 else { Now.error = "Sin señal"; Now.changed() }
@@ -112,7 +112,7 @@ class RadioService : MediaLibraryService() {
         }
 
         override fun onGetItem(session: MediaLibrarySession, browser: MediaSession.ControllerInfo, mediaId: String): ListenableFuture<LibraryResult<MediaItem>> {
-            val item = Store.parse(mediaId)?.let { (b, s) -> store.item(b, s) }
+            val item = store.itemFor(mediaId)
             return Futures.immediateFuture(if (item != null) LibraryResult.ofItem(item, null) else LibraryResult.ofError(LibraryResult.RESULT_ERROR_BAD_VALUE))
         }
 
@@ -124,15 +124,17 @@ class RadioService : MediaLibraryService() {
                 retried = ""; Now.error = ""
                 return Futures.immediateFuture(MediaSession.MediaItemsWithStartPosition(items, at, C.TIME_UNSET))
             }
-            val full = mediaItems.mapNotNull { m -> Store.parse(m.mediaId)?.let { (b, s) -> store.item(b, s) } }
+            val full = mediaItems.mapNotNull { m -> store.itemFor(m.mediaId) }
+            if (full.isNotEmpty()) { retried = ""; Now.error = "" }
             return Futures.immediateFuture(MediaSession.MediaItemsWithStartPosition(full, startIndex.coerceIn(0, maxOf(0, full.size - 1)), C.TIME_UNSET))
         }
 
         override fun onAddMediaItems(mediaSession: MediaSession, controller: MediaSession.ControllerInfo, mediaItems: MutableList<MediaItem>): ListenableFuture<MutableList<MediaItem>> =
-            Futures.immediateFuture(mediaItems.mapNotNull { m -> Store.parse(m.mediaId)?.let { (b, s) -> store.item(b, s) } }.toMutableList())
+            Futures.immediateFuture(mediaItems.mapNotNull { m -> store.itemFor(m.mediaId) }.toMutableList())
 
         // the car starts (or "play" on the headphones): the last station heard
         override fun onPlaybackResumption(mediaSession: MediaSession, controller: MediaSession.ControllerInfo): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
+            if (store.onTuned) store.tunedItem()?.let { return Futures.immediateFuture(MediaSession.MediaItemsWithStartPosition(listOf(it), 0, C.TIME_UNSET)) }
             val (items, at) = store.playlist(store.band, store.slot)
             return Futures.immediateFuture(MediaSession.MediaItemsWithStartPosition(items, at, C.TIME_UNSET))
         }
@@ -151,6 +153,7 @@ class Resolver(private val store: Store) : ResolvingDataSource.Resolver {
     override fun resolveDataSpec(dataSpec: DataSpec): DataSpec {
         val u = dataSpec.uri
         if (u.scheme != "deck90") return dataSpec
+        if (u.host == "tuned") return dataSpec.withUri(Uri.parse(address(store.tuned ?: throw IOException("no tuned station"))))
         val parts = u.pathSegments
         val band = parts.getOrNull(0) ?: throw IOException("bad station")
         val slot = parts.getOrNull(1)?.toIntOrNull() ?: throw IOException("bad station")

@@ -31,6 +31,16 @@ class Store(context: Context) {
 
     fun station(band: String, slot: Int): Station? = memories(band).getOrNull(slot - 1)
 
+    // a station found in the world search and tuned (not a memory until A.MEM or a number held keeps it), and
+    // whether it is the one playing
+    var tuned: Station?
+        get() = Station.fromJson(p.getString("tuned", null)?.let { runCatching { JSONObject(it) }.getOrNull() })
+        set(v) { p.edit().apply { if (v == null) remove("tuned") else putString("tuned", v.toJson().toString()) }.apply() }
+    var onTuned: Boolean
+        get() = p.getBoolean("onTuned", false) && tuned != null
+        set(v) { p.edit().putBoolean("onTuned", v).apply() }
+    fun current(): Station? = if (onTuned) tuned else station(band, slot)
+
     // the address that played last for a station (by its search), and forgetting it when it stops answering
     fun resolved(st: Station): String? = p.getString("url." + key(st), null)
     fun resolvedSet(st: Station, url: String?) {
@@ -47,6 +57,7 @@ class Store(context: Context) {
             return if (band in Bands.order && slot in 1..Bands.SLOTS) band to slot else null
         }
         fun uri(band: String, slot: Int): Uri = Uri.parse("deck90://station/$band/$slot")
+        const val TUNED = "tuned"                                    // the tuned station's media id; deck90://tuned
     }
 
     // a memory as the player and Android Auto see it: its name, the band and frequency under it
@@ -64,6 +75,16 @@ class Store(context: Context) {
                 .setExtras(extras).build())
             .build()
     }
+
+    fun tunedItem(): MediaItem? {
+        val st = tuned ?: return null
+        return MediaItem.Builder().setMediaId(TUNED).setUri(Uri.parse("deck90://tuned"))
+            .setMediaMetadata(MediaMetadata.Builder().setTitle(st.name).setArtist("MUNDO" + if (st.cc.isNotEmpty()) " · " + st.cc else "")
+                .setStation(st.name).setIsBrowsable(false).setIsPlayable(true)
+                .setMediaType(MediaMetadata.MEDIA_TYPE_RADIO_STATION).build())
+            .build()
+    }
+    fun itemFor(id: String?): MediaItem? = if (id == TUNED) tunedItem() else parse(id)?.let { (b, s) -> item(b, s) }
 
     // the band's memories in order (the empty ones left out), and where the one asked for is among them
     fun playlist(band: String, slot: Int): Pair<List<MediaItem>, Int> {

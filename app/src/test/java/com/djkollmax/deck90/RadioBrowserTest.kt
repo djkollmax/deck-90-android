@@ -16,6 +16,14 @@ class RadioBrowserTest {
         assertEquals(listOf("http://a/flac", "http://a/aac", "http://a/mp3", "http://b"), RadioBrowser.best(found).map { it.url })
     }
 
+    @Test fun `the world search keeps the country and the place, and only real country codes`() {
+        val found = RadioBrowser.parse("""[
+          {"name":"Jazz Uno","url":"http://a","codec":"MP3","bitrate":128,"countrycode":"AR","state":"Buenos Aires"},
+          {"name":"Otra","url":"http://b","codec":"AAC","bitrate":64,"countrycode":"xx1","state":"  "}]""")
+        assertEquals(listOf("AR" to "Buenos Aires", "" to ""), found.map { it.cc to it.place })
+        assertEquals("AR", org.json.JSONObject(found[0].toJson().toString()).getString("cc"))
+    }
+
     @Test fun `a name without what only tells its quality`() {
         assertEquals("radioparadise", RadioBrowser.base("Radio Paradise (FLAC lossless)"))
         assertEquals("clasica", RadioBrowser.base("Clásica 128 kbps MP3"))

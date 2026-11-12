@@ -16,12 +16,16 @@ const ST_KEYS = [   // [key, left %, top %, width %, height %, round]: Deck 90's
   ['m3', 59.970, 80.891, 6.997, 12.987], ['m4', 66.967, 80.891, 6.897, 12.987],
   ['m5', 74.663, 80.891, 6.597, 12.987], ['m6', 81.259, 80.891, 8.996, 12.987],
   ['slot', 17.091, 15.213, 73.463, 10.019], ['eject', 91.854, 24.490, 4.998, 15.955, 1],
+  ['pwr', 2.599, 80.891, 6.397, 12.987],                           // as on the PC's front (src/index.html)
   ['view', 28.886, 42.857, 53.373, 27.458],                         // the display itself: the VU, then the spectrum
 ];
 const el = id => document.getElementById(id);
 const app = window.Deck90Android || {                              // a browser: a stand-in, for a look at the face
-  state: () => JSON.stringify({ band: 'FM1', slot: 3, freq: '95.1', name: 'Metro · Un tema de prueba', station: 'Metro', song: 'Un tema de prueba', playing: true, quality: 'AAC 128',
-    memories: ['Aspen', '80s80s', 'Metro', 'Rock & Pop', 'La 100', 'Vorterix', '', '', '', '', '', ''] }),
+  state: () => JSON.stringify({ band: 'FM1', slot: 3, freq: '95.1', station: 'Metro', song: 'Un tema de prueba', playing: true, power: true, quality: 'AAC 128',
+    memories: ['Aspen', '80s80s', 'Metro', 'Rock & Pop', 'La 100', 'Vorterix', '', '', '', '', '', ''], wx: { t: 24.3, max: 28, min: 17, place: 'Quilmes' } }),
+  search: (q, cc) => setTimeout(() => faceFound([{ name: 'Radio de prueba ' + (q || cc), url: 'http://x', codec: 'FLAC', bitrate: 0, cc: cc || 'AR', place: 'Buenos Aires' },
+    { name: 'Otra radio', url: 'http://y', codec: 'MP3', bitrate: 128, cc: 'UY', place: '' }]), 300),
+  tune: j => toast('sintonizo ' + JSON.parse(j).name),
   levels: () => { const t = Date.now() / 300, l = 0.5 + 0.4 * Math.sin(t), r = 0.5 + 0.4 * Math.cos(t * 1.3); return [l, r, l * .35, r * .35].join(','); },
   spectrum: () => { const t = Date.now() / 400; return Array.from({ length: 28 }, (_, k) => (-28 - k * 0.9 + 8 * Math.sin(t + k * .7)).toFixed(1)).join(','); },
   key: k => toast('tecla ' + k),
@@ -51,22 +55,79 @@ window.faceToast = toast;
   }
 })();
 
-// the display's colour: SDM steps through hues (kept on this phone), HDB through three brightnesses
-const look = { hue: 0, dim: 1 };
+// ═══ the display as on the PC (src/ui/stereo/stereo.js): SDM its colour, six lights and then whole looks (each its
+// own glass, letters and meters; three change the whole front), held the one before; HDB four brightnesses; DISP
+// what the big letters show. Kept on this phone.
+const STEREO_HUES = [0, 38, 150, 196, 248, 300];
+const STEREO_DIM = [1, 1.32, .72, .48], STEREO_DIM_NAME = ['NORMAL', 'ALTO', 'MEDIO', 'BAJO'];
+const STEREO_LOOKS = [
+  { id: 'hd', name: 'HD', say: 'negro, letras amarillas' },
+  { id: 'amber', name: 'ÁMBAR', say: 'negro, letras ámbar de los 80' },
+  { id: 'ice', name: 'HIELO', say: 'azul noche, letras celestes de VFD' },
+  { id: 'night', name: 'VERDE NOCHE', say: 'negro verdoso, letras verdes' },
+  { id: 'sport', name: 'ROJO SPORT', say: 'negro, letras rojas' },
+  { id: 'white', name: 'BLANCO', say: 'negro, letras blancas' },
+  { id: 'lcd', name: 'LCD CLARO', say: 'vidrio claro, letras oscuras', light: true },
+  { id: 'miami', name: 'MIAMI', say: 'violeta, letras rosas, vúmetros celestes' },
+  { id: 'gold', name: 'ORO', say: 'marrón profundo, letras doradas' },
+  { id: 'aqua', name: 'AQUA', say: 'verde agua, letras turquesa' },
+  { id: 'cobalt', name: 'COBALTO', say: 'azul profundo, letras blanco azulado' },
+  { id: 'lime', name: 'LIMA', say: 'negro, letras verde lima' },
+  { id: 'rose', name: 'ROSA', say: 'negro, letras rosa' },
+  { id: 'violet', name: 'VIOLETA', say: 'negro, letras violeta' },
+  { id: 'fire', name: 'FUEGO', say: 'negro, letras naranja, vúmetros rojos' },
+  { id: 'matrix', name: 'MATRIX', say: 'fósforo verde de terminal' },
+  { id: 'sunset', name: 'ATARDECER', say: 'violeta oscuro, letras naranja, vúmetros rosa' },
+  { id: 'nixie', name: 'NIXIE', say: 'marrón, el naranja de los tubos nixie' },
+  { id: 'oled', name: 'OLED', say: 'negro puro, blanco frío, vúmetros azules' },
+  { id: 'lcdblue', name: 'LCD AZUL', say: 'LCD con luz azul, letras blancas' },
+  { id: 'lcdamber', name: 'LCD ÁMBAR', say: 'LCD con luz ámbar, letras oscuras', light: true },
+  { id: 'duo', name: 'BICOLOR', say: 'negro, letras amarillas, carteles celestes, vúmetros verdes' },
+  { id: 'carbon', name: 'CARBONO', say: 'negro, letras blancas, carteles rojos' },
+  { id: 'neon', name: 'NEÓN', say: 'negro, letras celestes, carteles fucsia' },
+  { id: 'emerald', name: 'ESMERALDA', say: 'verde profundo, letras verde claro, vúmetros dorados' },
+  { id: 'plasma', name: 'PLASMA', say: 'el naranja rojizo de las pantallas de plasma' },
+  { id: 'tokio', name: 'TOKIO', say: 'al estilo Sony de los 2000: frente negro, teclas con luz azul, letras blancas', face: 'tokio' },
+  { id: 'studio', name: 'ESTUDIO', say: 'frente negro mate de equipo pro, letras ámbar, vúmetros verdes', face: 'pro' },
+  { id: 'titan', name: 'TITANIO', say: 'frente plateado de equipo pro, vidrio negro, letras blancas y naranja', face: 'titan' },
+  { id: 'real', name: 'ORIGINAL', say: 'los colores del DP940 de verdad: vidrio violeta, letras amarillas, segmentos apagados verde oliva' },
+];
+const STEREO_COLORS = STEREO_HUES.length + STEREO_LOOKS.length;
+const STEREO_DISP = ['song', 'clock', 'temp', 'clocktemp', 'time'];
+const STEREO_DISP_NAME = { song: 'NORMAL', clock: 'HORA', temp: 'TEMPERATURA', clocktemp: 'HORA Y TEMPERATURA', time: 'TIEMPO' };
+const look = { color: 1, dimI: 0, disp: 'song' };
 try { Object.assign(look, JSON.parse(localStorage.getItem('deck90-face') || '{}')); } catch (_) {}
+if (!(look.color >= 1 && look.color <= STEREO_COLORS)) look.color = 1;
+if (!(look.dimI >= 0 && look.dimI < STEREO_DIM.length)) look.dimI = 0;
+if (!STEREO_DISP.includes(look.disp)) look.disp = 'song';
+const stereoLook = () => STEREO_LOOKS[look.color - STEREO_HUES.length - 1] || null;
+const lookHue = () => stereoLook() ? 0 : STEREO_HUES[look.color - 1];
 function lookApply() {
-  face.style.setProperty('--st-hue', look.hue + 'deg'); face.style.setProperty('--st-dim', look.dim);
-  const meters = el('mCanvas');
-  meters.style.filter = (look.view === 'spec' && look.hue ? 'hue-rotate(' + look.hue + 'deg) ' : '')
-    + (look.dim < 1 ? 'brightness(' + look.dim + ')' : '');
+  const lk = stereoLook(), d = el('stDisplay');
+  face.style.setProperty('--st-hue', lookHue() + 'deg'); face.style.setProperty('--st-dim', STEREO_DIM[look.dimI]);
+  d.className = d.className.replace(/\s*\blook(-[a-z]+)?\b/g, '') + (lk ? ' look look-' + lk.id + (lk.light ? ' look-light' : '') : '');
+  face.dataset.face = lk && lk.face || '';
+  const meters = el('mCanvas'), hue = lookHue(), dim = Math.min(1, STEREO_DIM[look.dimI]);
+  meters.style.filter = (look.view === 'spec' && hue ? 'hue-rotate(' + hue + 'deg) ' : '') + (dim < 1 ? 'brightness(' + dim + ')' : '');
   try { localStorage.setItem('deck90-face', JSON.stringify(look)); } catch (_) {}
 }
 lookApply();
 
 function key(k, hold) {
   if (k === 'view') { viewNext(); return; }
-  if (k === 'sdm') { look.hue = (look.hue + (hold ? 300 : 60)) % 360; lookApply(); return; }
-  if (k === 'hdb') { look.dim = look.dim >= 1 ? .55 : look.dim >= .55 ? .8 : 1; lookApply(); return; }
+  if (k === 'sdm') {
+    look.color = (look.color - 1 + (hold ? STEREO_COLORS - 1 : 1)) % STEREO_COLORS + 1; lookApply();
+    const lk = stereoLook();
+    toast('SDM ' + look.color + '/' + STEREO_COLORS + ' · ' + (lk ? lk.name + ': ' + lk.say : 'COLOR ' + look.color), lk ? 2000 : 1200);
+    return;
+  }
+  if (k === 'hdb') { look.dimI = (look.dimI + 1) % STEREO_DIM.length; lookApply(); toast('HDB · brillo ' + STEREO_DIM_NAME[look.dimI], 1200); return; }
+  if (k === 'disp') {
+    look.disp = STEREO_DISP[(STEREO_DISP.indexOf(look.disp) + 1) % STEREO_DISP.length]; lookApply();
+    toast('DISP · ' + STEREO_DISP_NAME[look.disp] + (look.disp === 'time' ? ' (la radio es en vivo)' : ''), 1500);
+    read.last = ''; read(); return;
+  }
+  if (k === 'scan' && hold) { finderOpen(true); return; }          // as on the PC: held, any station in the world
   app.key(k, !!hold);
   setTimeout(read, 60);
 }
@@ -78,10 +139,10 @@ function key(k, hold) {
     const k = b.dataset.st;
     if (/^vol(up|down)$/.test(k)) {
       held = true; key(k);
-      volT = setTimeout(function rep() { key(k); volT = setTimeout(rep, 180); }, 450);
+      volT = setTimeout(function rep() { key(k); volT = setTimeout(rep, 100); }, 350);
       return;
     }
-    if (/^(m[1-6]|sdm|band)$/.test(k)) holdT = setTimeout(() => { held = true; key(k, true); }, 1000);
+    if (/^(m[1-6]|sdm|band|scan)$/.test(k)) holdT = setTimeout(() => { held = true; key(k, true); }, 1000);
   });
   const up = () => { clearTimeout(holdT); clearTimeout(volT); face.querySelectorAll('.st-hot.down').forEach(b => b.classList.remove('down')); };
   ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => face.addEventListener(ev, up));
@@ -112,7 +173,7 @@ const BANDS = ['FM1', 'FM2', 'FM3', 'FM4', 'FM5', 'HI-FI', 'AM'];
     if (b.dataset.v) { viewSet(b.dataset.v); return; }
     if (b.dataset.band) app.key('band:' + b.dataset.band.replace('-', ''), false);
     else if (b.dataset.m) app.key('mem' + b.dataset.m, false);
-    else if (b.dataset.k) app.key(b.dataset.k, false);
+    else if (b.dataset.k) { key(b.dataset.k); return; }
     setTimeout(read, 80);
   });
   pad.addEventListener('contextmenu', e => e.preventDefault());
@@ -126,22 +187,47 @@ function padSync(s) {
   });
 }
 
-// the app's state on the display and under it
+// the app's state on the display, as the PC's stereo writes it (stereoText, radio mode), and under it
+const shortName = n => String(n || '').replace(/\b(fm|radio|am)\b/gi, '').replace(/\s+/g, ' ').trim().slice(0, 12) || 'RADIO';
+const two = n => String(n).padStart(2, '0');
+function wxTemp(s) { return s.wx && typeof s.wx.t === 'number' ? Math.round(s.wx.t) + '°C' : ''; }
+// DISP: the time, the temperature, both taking turns (4 s each), or LIVE (a radio has no time left); the volume first
+function dispText(s) {
+  if (s.flash) return s.flash;
+  let d = look.disp;
+  if (d === 'clocktemp') d = wxTemp(s) && Math.floor(Date.now() / 4000) % 2 ? 'temp' : 'clock';
+  if (d === 'clock') { const t = new Date(); return two(t.getHours()) + ':' + two(t.getMinutes()); }
+  if (d === 'temp') return wxTemp(s) || 'NO WEATHER';
+  if (d === 'time') return 'LIVE';
+  return '';
+}
+function context(s) {
+  if (look.disp === 'temp' && wxTemp(s) && s.wx.place)
+    return s.wx.place + (typeof s.wx.max === 'number' ? ' · ↑' + Math.round(s.wx.max) + '° ↓' + Math.round(s.wx.min) + '°' : '');
+  return s.station ? (s.freq ? s.band + ' ' + s.freq + ' · ' : '') + s.station : s.band;
+}
 function read() {
   let s;
   try { s = JSON.parse(app.state()); } catch (_) { return; }
-  const key = JSON.stringify(s);
+  view = s;
+  const live = !!s.playing, extra = dispText(s), off = s.power === false;
+  const trouble = s.error ? 'NO SIGNAL' : s.buffering ? 'TUNING…' : '';
+  const line = trouble || (!live ? '' : s.song && Math.floor(Date.now() / 4000) % 3 !== 2 ? s.song : s.station || '');
+  const radio = extra
+    ? { band: '', frequency: extra, preset: s.slot || 1, live, name: context(s), mono: !!s.mono, quality: s.quality || '' }
+    : { band: s.memo ? 'A.MEM' : s.tuned ? '' : s.band, frequency: s.freq || shortName(s.station).toUpperCase(), preset: s.slot || 1, live, name: line, mono: !!s.mono, quality: live ? s.quality || '' : '' };
+  const key = JSON.stringify([radio, off, s.memories, s.scan, s.slot, s.band]);
+  face.classList.toggle('off', off);
+  el('stereoView').classList.toggle('aux-on', live);
   if (key === read.last) return;
-  read.last = key; view = s;
-  if (disp) {
-    disp.setPlayback(false);
-    disp.setRadio({ band: s.memo ? 'A.MEM' : s.band, frequency: s.freq || '', preset: s.slot || 1, live: !!s.playing, name: s.name || '', mono: !!s.mono, quality: s.quality || '' });
-  }
+  read.last = key;
+  if (disp) { disp.setPlayback(false); disp.setRadio(radio); }
   padSync(s);
-  el('nowBand').textContent = (s.memo ? 'A.MEM · ' : '') + s.band + ' · ' + s.slot + (s.freq ? ' · ' + s.freq : '') + (s.scan ? ' · SCAN' : '');
+  el('nowBand').textContent = (s.memo ? 'A.MEM · ' : '') + (s.tuned ? 'MUNDO' + (s.cc ? ' · ' + s.cc : '') : s.band + ' · ' + s.slot + (s.freq ? ' · ' + s.freq : '')) + (s.scan ? ' · SCAN' : '');
   el('nowName').textContent = s.station || 'DECK 90';
-  el('nowSong').textContent = s.song || '';
+  el('nowSong').textContent = trouble || s.song || '';
   const q = el('nowQ'); q.textContent = (/FLAC/.test(s.quality || '') ? 'HI-FI · ' : '') + (s.quality || ''); q.classList.toggle('hifi', /FLAC/.test(s.quality || ''));
+  if (finderShown()) finderKeepSync();
 }
 setInterval(read, 250); read();
 
@@ -478,3 +564,74 @@ function drawSpectrum({ d, skin, columns, segments, rows, ledW, ledH }) {
   cx.restore();
 }
 
+
+// ═══ RADIO SEARCH (SCAN held, as on the PC: src/ui/tuner/finder.js): any station in the world, by name and/or
+// country, from Radio Browser (the app asks it: search(), the answer in faceFound). A station touched plays (a tuned
+// station, not a memory); the numbers below keep the one playing in the band's memories
+const RF_COUNTRIES = ['AR', 'UY', 'CL', 'BR', 'PY', 'BO', 'PE', 'CO', 'VE', 'EC', 'MX', 'CU', 'US', 'CA', 'ES', 'PT', 'FR', 'IT',
+  'DE', 'AT', 'CH', 'GB', 'IE', 'NL', 'BE', 'DK', 'SE', 'NO', 'FI', 'IS', 'PL', 'CZ', 'HU', 'GR', 'TR', 'RU', 'UA', 'IL', 'ZA',
+  'EG', 'MA', 'IN', 'CN', 'JP', 'KR', 'TW', 'HK', 'SG', 'TH', 'ID', 'PH', 'AU', 'NZ', 'JM'];
+const rfCountryName = (() => { let dn = null; try { dn = new Intl.DisplayNames(['es'], { type: 'region' }); } catch (_) {} return cc => (dn && dn.of(cc)) || cc; })();
+let rfResults = [], rfBusy = false;
+(function finderBuild() {
+  const sel = el('rfCountry');
+  const opts = RF_COUNTRIES.map(cc => [cc, rfCountryName(cc)]).sort((a, b) => a[1].localeCompare(b[1], 'es'));
+  sel.append(new Option('Todos los países', ''), ...opts.map(([cc, n]) => new Option(n, cc)));
+  el('rfKeep').append(...Array.from({ length: 12 }, (_, i) => { const b = document.createElement('button'); b.type = 'button'; b.dataset.m = i + 1; b.textContent = i + 1; return b; }));
+})();
+function finderShown() { return el('rfFind').classList.contains('show'); }
+function finderOpen(on) {
+  el('rfFind').classList.toggle('show', on);
+  if (!on) return;
+  finderKeepSync();
+  setTimeout(() => el('rfName').focus(), 50);
+}
+function finderKeepSync() {
+  el('rfBand').textContent = view.band || 'FM1';
+  el('rfKeep').querySelectorAll('button').forEach(b => { b.disabled = !view.playing; });
+}
+function finderSearch() {
+  const q = el('rfName').value.trim(), cc = el('rfCountry').value, msg = el('rfMsg');
+  if (!q && !cc) { msg.textContent = 'Escribí un nombre o elegí un país'; return; }
+  if (!app.search) { msg.textContent = '⚠ La búsqueda anda en la app'; return; }
+  rfBusy = true; msg.textContent = 'Buscando…';
+  el('rfName').blur();
+  app.search(q, cc);
+}
+window.faceFound = r => {
+  rfBusy = false;
+  const msg = el('rfMsg');
+  if (!r) { msg.textContent = '⚠ No pude buscar: ¿hay internet?'; return; }
+  rfResults = r;
+  msg.textContent = r.length ? r.length + (r.length === 1 ? ' radio' : ' radios') + (r.length >= 60 ? ' (las 60 más escuchadas)' : '') : 'No encontré radios con ese nombre';
+  finderRender();
+};
+function finderRender() {
+  el('rfList').replaceChildren(...rfResults.map((r, i) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'rf-item' + (view.tuned && view.station === r.name ? ' on' : ''); b.dataset.i = i;
+    const name = document.createElement('b'); name.textContent = r.name;
+    const where = document.createElement('small'); where.textContent = [r.place, r.cc ? rfCountryName(r.cc) : ''].filter(Boolean).join(', ');
+    const q = document.createElement('i'), codec = String(r.codec || '').toUpperCase();
+    q.textContent = (codec === 'FLAC' ? 'HI-FI · ' : '') + [codec, r.bitrate || ''].filter(Boolean).join(' ');
+    if (codec === 'FLAC') q.className = 'hifi';
+    b.append(name, where, q);
+    return b;
+  }));
+}
+el('rfGo').addEventListener('click', finderSearch);
+el('rfClose').addEventListener('click', () => finderOpen(false));
+el('rfFind').addEventListener('click', e => { if (e.target.id === 'rfFind') finderOpen(false); });
+el('rfCountry').addEventListener('change', finderSearch);
+el('rfName').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); finderSearch(); } });
+el('rfList').addEventListener('click', e => {
+  const b = e.target.closest('.rf-item'); if (!b) return;
+  const r = rfResults[Number(b.dataset.i)]; if (!r) return;
+  app.tune(JSON.stringify(r));
+  setTimeout(() => { read(); finderRender(); }, 300);
+});
+el('rfKeep').addEventListener('click', e => {
+  const b = e.target.closest('button[data-m]'); if (!b || b.disabled) return;
+  app.key('keep' + b.dataset.m, true);
+  setTimeout(read, 150);
+});

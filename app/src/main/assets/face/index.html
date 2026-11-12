@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="face.css">
 </head>
 <body>
-<main class="stereo" id="stereoView">
+<main class="stereo stereo-panel" id="stereoView">
   <div class="st-face" id="stFace">
     <img class="st-photo" src="img/front.jpg" alt="" draggable="false">
     <div class="st-display" id="stDisplay" style="left:28.886%;top:42.857%;width:53.373%;height:27.458%"></div>
@@ -32,6 +32,21 @@
     </div>
   </section>
 </main>
+<!-- the radio search (SCAN held), as on the PC: face.js fills the countries, the list and the numbers -->
+<div id="rfFind" role="dialog" aria-label="Buscar radio">
+  <div class="rf-card">
+    <div class="rf-head"><span>BUSCAR RADIO EN EL MUNDO</span><button type="button" id="rfClose" aria-label="Cerrar">✕</button></div>
+    <div class="rf-row">
+      <label class="rf-name">NOMBRE<input id="rfName" spellcheck="false" autocomplete="off" enterkeyhint="search" placeholder="jazz, BBC, Radio Paradise…"></label>
+      <label class="rf-country">PAÍS<select id="rfCountry"></select></label>
+      <button type="button" id="rfGo">BUSCAR</button>
+    </div>
+    <div class="rf-msg" id="rfMsg"></div>
+    <div id="rfList" class="rf-list" role="listbox"></div>
+    <div class="rf-keep">GUARDAR LA QUE SUENA EN <span id="rfBand">FM1</span>:<div id="rfKeep"></div></div>
+    <div class="rf-help">Tocá una radio para escucharla. Las de calidad CD dicen HI-FI. Los datos son de Radio Browser.</div>
+  </div>
+</div>
 <div id="toast" role="status"></div>
 <script src="dp940-display.js"></script>
 <script src="face.js"></script>

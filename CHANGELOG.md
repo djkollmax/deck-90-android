@@ -20,3 +20,9 @@
 - Tablets: the stacked screen either way up (only a phone lying down shows the face alone), the face at most 30% of
   the height when wide, the memories in two rows of six, bigger letters and keys. Lying down a tablet adds
   ESTÉREO, the face alone as big as it fits (the display's tap goes RADIO → VU → ESPECTRO → ESTÉREO).
+- The stereo's keys as on the PC (src/ui/stereo/stereo.js): SDM through the PC's 6 lights and 30 looks (the three
+  that change the whole front too; held, the one before), HDB its four brightnesses, DISP NORMAL · HORA ·
+  TEMPERATURA · HORA Y TEMPERATURA · TIEMPO (the weather from Open-Meteo for Quilmes), the radio line taking turns
+  between the song and the station, VOL ▲ one step and ▼ three with the volume big on the display, PWR off and on,
+  the PC's toasts. SCAN held opens the world radio search (Radio Browser, by name and country); a station found
+  plays as a tuned station and the numbers keep it in the band.
