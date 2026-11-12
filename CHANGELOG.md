@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.1
+
+- SCAN held on the bottom keys (standing up, and the tablet) opens the world radio search too, as SCAN held on the
+  stereo's face does.
+
 ## 0.1.0
 
 - The radio of Deck 90 (its seven bands and twelve memories each, the PC's stations) as a Media3 library service:

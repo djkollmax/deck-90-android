@@ -163,8 +163,9 @@ const BANDS = ['FM1', 'FM2', 'FM3', 'FM4', 'FM5', 'HI-FI', 'AM'];
   let holdT = 0, held = false;
   const pad = el('pad');
   pad.addEventListener('pointerdown', e => {
-    const m = e.target.closest('[data-m]'); held = false;
+    const m = e.target.closest('[data-m]'), k = e.target.closest('[data-k]'); held = false;
     if (m) holdT = setTimeout(() => { held = true; app.key('keep' + m.dataset.m, true); setTimeout(read, 80); }, 1000);
+    else if (k && k.dataset.k === 'scan') holdT = setTimeout(() => { held = true; key('scan', true); }, 1000);   // as on the face: the world search
   });
   ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => pad.addEventListener(ev, () => clearTimeout(holdT)));
   pad.addEventListener('click', e => {
