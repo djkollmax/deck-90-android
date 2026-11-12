@@ -56,6 +56,9 @@ const look = { hue: 0, dim: 1 };
 try { Object.assign(look, JSON.parse(localStorage.getItem('deck90-face') || '{}')); } catch (_) {}
 function lookApply() {
   face.style.setProperty('--st-hue', look.hue + 'deg'); face.style.setProperty('--st-dim', look.dim);
+  const meters = el('mCanvas');
+  meters.style.filter = (look.view === 'spec' && look.hue ? 'hue-rotate(' + look.hue + 'deg) ' : '')
+    + (look.dim < 1 ? 'brightness(' + look.dim + ')' : '');
   try { localStorage.setItem('deck90-face', JSON.stringify(look)); } catch (_) {}
 }
 lookApply();
@@ -146,17 +149,59 @@ setInterval(read, 250); read();
 // the PC's stereo does; VU (RMS with a needle's swing, 0 VU a little over the station's own level, PEAK near the
 // top of the scale) and ESPECTRO (28 bands, 40 Hz – 16 kHz, +3 dB per octave so music sits level, peaks held a moment)
 const VIEWS = ['radio', 'vu', 'spec'], VIEW_NAMES = { radio: 'RADIO', vu: 'VU', spec: 'ESPECTRO' };
-const cv = el('mCanvas'), cx = cv.getContext('2d');
+const cv = el('mCanvas'), cx = cv.getContext('2d', { alpha: false });
+const wide = matchMedia('(min-aspect-ratio: 3/2)');
+const staticLayer = document.createElement('canvas');
+const staticContext = staticLayer.getContext('2d', { alpha: false });
+let artwork = null, dirty = true;
+const VU_SKINS = [
+  { name: 'ÁMBAR', paper: ['#fff2ca', '#edc477', '#a66f32'], ink: '#2a1d12', red: '#a42b1e', needle: '#2c140b' },
+  { name: 'CREMA', paper: ['#fff9e7', '#e8dac0', '#a99980'], ink: '#28201a', red: '#ae281d', needle: '#361713' },
+  { name: 'HI-FI 90', paper: ['#213847', '#12212d', '#050a11'], ink: '#c9e9f6', red: '#ff8053', needle: '#fff1bc' }
+];
+const SPEC_SKINS = [
+  { name: 'FL 90', colors: ['#42ef94', '#ffe27b', '#ff8453'], peak: '#ffe8a3' },
+  { name: 'CIAN', colors: ['#28dccf', '#a7f7ff', '#e2fcff'], peak: '#d8ffff' },
+  { name: 'ÁMBAR', colors: ['#eb9a35', '#ffcf70', '#ffe7ac'], peak: '#fff2b8' }
+];
+function skinIndex(value, skins) {
+  return Number.isInteger(value) && skins[value] ? value : 0;
+}
+function meterAction() {
+  if (wide.matches) { viewNext(); return; }
+  const [property, skins] = mode === 'vu' ? ['vuSkin', VU_SKINS] : ['specSkin', SPEC_SKINS];
+  look[property] = (skinIndex(look[property], skins) + 1) % skins.length;
+  lookApply();
+  dirty = true;
+  toast(skins[look[property]].name);
+}
+const sizeObserver = new ResizeObserver(() => { dirty = true; });
+sizeObserver.observe(cv);
 let mode = 'radio';
 function viewSet(v, quiet) {
   mode = VIEWS.includes(v) ? v : 'radio'; look.view = mode; lookApply();
   document.body.dataset.view = mode;
-  el('padViews').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.v === mode));
-  if (!quiet && matchMedia('(min-aspect-ratio: 3/2)').matches)
+  dirty = true;
+  el('padViews').querySelectorAll('button').forEach(button => {
+    const selected = button.dataset.v === mode;
+    button.classList.toggle('on', selected);
+    button.setAttribute('aria-pressed', String(selected));
+  });
+  meterLabel();
+  if (!quiet && wide.matches)
     toast(mode === 'radio' ? 'RADIO' : VIEW_NAMES[mode] + ' · tocá la pantalla para ' + (mode === 'vu' ? 'el espectro' : 'volver a la radio'));
 }
 function viewNext() { viewSet(VIEWS[(VIEWS.indexOf(mode) + 1) % VIEWS.length]); }
-cv.addEventListener('click', viewNext);
+function meterLabel() {
+  cv.setAttribute('aria-label', wide.matches ? 'Pasar a la vista siguiente' : 'Cambiar diseño del medidor');
+}
+wide.addEventListener('change', meterLabel);
+cv.addEventListener('click', meterAction);
+cv.addEventListener('keydown', event => {
+  if (event.key !== 'Enter' && event.key !== ' ') return;
+  event.preventDefault();
+  meterAction();
+});
 viewSet(look.view, true);
 
 const db = x => x > 0 ? 20 * Math.log10(x) : -90;
@@ -164,7 +209,7 @@ let avg = -24, at = 0;
 const vu = { l: -20, r: -20, ref: -22, peakL: 0, peakR: 0 };
 const SB = 28, sp = { bar: new Float32Array(SB), peak: new Float32Array(SB), hold: new Float32Array(SB), top: -24 };
 const fc = k => 40 * Math.pow(400, (k + .5) / SB);                 // a band's middle: 40 Hz × 400^…, up to 16 kHz
-(function frame(now) {
+function frame(now) {
   requestAnimationFrame(frame);
   const dt = at ? Math.min(200, now - at) : 16; at = now;
   const on = !!view.playing;
@@ -176,16 +221,20 @@ const fc = k => 40 * Math.pow(400, (k + .5) / SB);                 // a band's m
     disp.setLevels(f(dl), f(dr));
   }
   if (mode === 'radio') return;
-  const d = devicePixelRatio || 1, w = Math.round(cv.clientWidth * d), h = Math.round(cv.clientHeight * d);
-  if (!w || !h) return;
-  if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
-  cx.clearRect(0, 0, w, h);
-  cv.style.filter = (mode === 'spec' && look.hue ? 'hue-rotate(' + look.hue + 'deg) ' : '') + (look.dim < 1 ? 'brightness(' + look.dim + ')' : '');
+  const d = window.devicePixelRatio || 1;
+  if (dirty || artwork?.d !== d) {
+    dirty = false;
+    artwork = buildArtwork(d);
+  }
+  if (!artwork) return;
+  const { w, h } = artwork;
+  cx.drawImage(staticLayer, 0, 0, w, h);
   if (mode === 'vu') vuFrame(rl, rr, pl, pr, dt, w, h);
   else specFrame(on ? String(app.spectrum ? app.spectrum() : '') : '', dt, w, h);
-})(0);
+}
+requestAnimationFrame(frame);
 
-// ── VU: two needles on lit amber faces, side by side when there's room, one over the other standing up
+// VU calibration and ballistics.
 const VU_MARKS = [-20, -10, -7, -5, -3, -2, -1, 0, 1, 2, 3];
 const vuPos = v => Math.max(-0.03, Math.min(1.06, (Math.pow(10, v / 20) - 0.1) / (Math.pow(10, 3 / 20) - 0.1)));
 function vuFrame(rl, rr, pl, pr, dt, W, H) {
@@ -194,48 +243,10 @@ function vuFrame(rl, rr, pl, pr, dt, W, H) {
   const k = 1 - Math.exp(-dt / 95);                                  // about the 300 ms a VU needle takes
   vu.l += (Math.max(-26, dl - vu.ref - 2) - vu.l) * k; vu.r += (Math.max(-26, dr - vu.ref - 2) - vu.r) * k;
   vu.peakL = pl >= .97 ? 350 : Math.max(0, vu.peakL - dt); vu.peakR = pr >= .97 ? 350 : Math.max(0, vu.peakR - dt);
-  const side = W / H >= 1.9, g = Math.round(Math.min(W, H) * .04);
-  if (side) { const mw = (W - g) / 2; vuMeter(0, 0, mw, H, vu.l, 'L', vu.peakL > 0); vuMeter(mw + g, 0, mw, H, vu.r, 'R', vu.peakR > 0); }
-  else { const mh = (H - g) / 2; vuMeter(0, 0, W, mh, vu.l, 'L', vu.peakL > 0); vuMeter(0, mh + g, W, mh, vu.r, 'R', vu.peakR > 0); }
+  drawNeedle(artwork.meters[0], vu.l, vu.peakL > 0);
+  drawNeedle(artwork.meters[1], vu.r, vu.peakR > 0);
 }
-function vuMeter(x, y, w, h, val, ch, peak) {
-  const fw = Math.min(w, h * 1.9), fh = Math.min(h, fw / 1.9);       // a face of 1.9:1, centred
-  x += (w - fw) / 2; y += (h - fh) / 2; w = fw; h = fh;
-  const r = h * .07;
-  cx.save();
-  rrect(x, y, w, h, r); cx.fillStyle = '#121212'; cx.fill();
-  const ix = x + h * .045, iy = y + h * .045, iw = w - h * .09, ih = h - h * .09;
-  rrect(ix, iy, iw, ih, r * .7); cx.save(); cx.clip();
-  const bg = cx.createRadialGradient(ix + iw / 2, iy + ih * .95, ih * .1, ix + iw / 2, iy + ih * .7, iw * .75);
-  bg.addColorStop(0, '#fff1c8'); bg.addColorStop(.6, '#f2cf86'); bg.addColorStop(1, '#c9953f');
-  cx.fillStyle = bg; cx.fillRect(ix, iy, iw, ih);
-  const px = ix + iw / 2, py = iy + ih * 1.18, R = ih * 1.02, A = 47 * Math.PI / 180;
-  const ang = p => -A + 2 * A * p, at = (rad, p) => [px + rad * Math.sin(ang(p)), py - rad * Math.cos(ang(p))];
-  cx.lineCap = 'butt';
-  cx.beginPath(); cx.arc(px, py, R * .8, -Math.PI / 2 - A, -Math.PI / 2 + ang(vuPos(0))); cx.strokeStyle = '#1c1a16'; cx.lineWidth = ih * .012; cx.stroke();
-  cx.beginPath(); cx.arc(px, py, R * .8 + ih * .02, -Math.PI / 2 + ang(vuPos(0)), -Math.PI / 2 + A); cx.strokeStyle = '#c3281e'; cx.lineWidth = ih * .05; cx.stroke();
-  cx.font = '700 ' + Math.round(ih * .085) + 'px Arial, Helvetica, sans-serif'; cx.textAlign = 'center'; cx.textBaseline = 'middle';
-  for (const m of VU_MARKS) {
-    const p = vuPos(m), [ax, ay] = at(R * .8, p), [bx, by] = at(R * (m === 0 || m === -20 || m === 3 ? .9 : .87), p), [tx, ty] = at(R * .97, p);
-    cx.beginPath(); cx.moveTo(ax, ay); cx.lineTo(bx, by); cx.strokeStyle = m > 0 ? '#c3281e' : '#1c1a16'; cx.lineWidth = ih * .014; cx.stroke();
-    if (m !== -1 || iw > ih * 1.6) { cx.fillStyle = m > 0 ? '#c3281e' : '#1c1a16'; cx.fillText(m > 0 ? '+' + m : String(Math.abs(m)), tx, ty); }
-  }
-  cx.font = '700 ' + Math.round(ih * .16) + 'px Georgia, "Times New Roman", serif'; cx.fillStyle = '#1c1a16'; cx.fillText('VU', px, iy + ih * .6);
-  cx.font = '700 ' + Math.round(ih * .07) + 'px Arial, Helvetica, sans-serif'; cx.textAlign = 'left'; cx.fillText(ch, ix + ih * .07, iy + ih * .1);
-  cx.textAlign = 'right'; cx.fillStyle = '#5b4a2a'; cx.fillText('DECK 90', ix + iw - ih * .07, iy + ih * .1);
-  const [nx, ny] = at(R * .93, vuPos(val));                          // the needle, from its pivot under the face
-  cx.beginPath(); cx.moveTo(px, py); cx.lineTo(nx, ny); cx.strokeStyle = '#111'; cx.lineWidth = Math.max(1.5, ih * .012); cx.stroke();
-  const plate = iy + ih * .8;                                        // the black plate hiding the pivot, and PEAK
-  cx.fillStyle = '#16140f'; cx.fillRect(ix, plate, iw, ih - (plate - iy));
-  const lx = ix + iw - ih * .2, ly = plate + (ih - (plate - iy)) / 2;
-  cx.beginPath(); cx.arc(lx, ly, ih * .035, 0, 2 * Math.PI); cx.fillStyle = peak ? '#ff3b2e' : '#3a1210'; cx.fill();
-  if (peak) { cx.shadowColor = '#ff3b2e'; cx.shadowBlur = ih * .08; cx.fill(); cx.shadowBlur = 0; }
-  cx.font = '700 ' + Math.round(ih * .055) + 'px Arial, Helvetica, sans-serif'; cx.textAlign = 'right'; cx.fillStyle = '#8a8572'; cx.fillText('PEAK', lx - ih * .06, ly);
-  cx.restore(); cx.restore();
-}
-function rrect(x, y, w, h, r) { cx.beginPath(); cx.roundRect ? cx.roundRect(x, y, w, h, r) : cx.rect(x, y, w, h); }
 
-// ── ESPECTRO: segmented bars as on a 90s deck's display, green, then amber, then red at the top
 const SPEC_LABELS = [[63, '63'], [125, '125'], [250, '250'], [500, '500'], [1000, '1k'], [2000, '2k'], [4000, '4k'], [8000, '8k'], [16000, '16k']];
 function specFrame(str, dt, W, H) {
   const vals = str ? str.split(',').map(Number) : [];
@@ -248,28 +259,213 @@ function specFrame(str, dt, W, H) {
     if (sp.bar[k] >= sp.peak[k]) { sp.peak[k] = sp.bar[k]; sp.hold[k] = 700; }
     else if ((sp.hold[k] -= dt) < 0) sp.peak[k] = Math.max(sp.bar[k], sp.peak[k] - fall * .6);
   }
-  const d = devicePixelRatio || 1, lab = Math.round(14 * d), head = Math.round(16 * d);
-  cx.fillStyle = '#050607'; rrect(0, 0, W, H, 8 * d); cx.fill();
-  cx.font = '700 ' + Math.round(10 * d) + 'px Consolas, "Courier New", monospace'; cx.textBaseline = 'middle';
-  cx.fillStyle = '#4f7d78'; cx.textAlign = 'left'; cx.fillText('ANALIZADOR DE ESPECTRO', 10 * d, head * .7);
-  cx.textAlign = 'right'; cx.fillText(SB + ' BANDAS', W - 10 * d, head * .7);
-  const x0 = 10 * d, x1 = W - 10 * d, y0 = head + 6 * d, y1 = H - lab - 4 * d;
-  const bw = (x1 - x0) / SB, gap = Math.max(1, bw * .22);
-  const segs = Math.max(10, Math.min(32, Math.round((y1 - y0) / (7 * d)))), sh = (y1 - y0) / segs, sg = Math.max(1, sh * .28);
-  const col = i => i >= segs * .88 ? '#ff5a4e' : i >= segs * .7 ? '#ffd166' : '#5ef08a';
-  for (let k = 0; k < SB; k++) {
-    const x = x0 + k * bw + gap / 2, lit = Math.round(sp.bar[k] * segs), pk = Math.min(segs - 1, Math.round(sp.peak[k] * segs) - 1);
-    for (let i = 0; i < segs; i++) {
-      const y = y1 - (i + 1) * sh + sg / 2;
-      cx.globalAlpha = i < lit || (i === pk && pk > 0) ? 1 : .07; cx.fillStyle = col(i); cx.fillRect(x, y, bw - gap, sh - sg);
-    }
-  }
-  cx.globalAlpha = 1; cx.fillStyle = '#6f6b5d'; cx.textAlign = 'center';
-  const every = bw * SB / (d * 9) < 34 ? 2 : 1;
-  SPEC_LABELS.forEach(([f, t], i) => {
-    if (i % every) return;
-    const k = Math.log(f / 40) / Math.log(400) * SB - .5;
-    const tw = cx.measureText(t).width / 2;
-    cx.fillText(t, Math.max(x0 + tw, Math.min(x1 - tw, x0 + (k + .5) * bw)), H - lab / 2 - 2 * d);
-  });
+  drawSpectrum(artwork);
 }
+
+/* Artwork is rebuilt only when the view, skin or backing-store size changes. */
+function buildArtwork(d) {
+  const w = Math.round(cv.clientWidth * d), h = Math.round(cv.clientHeight * d);
+  if (!w || !h) return null;
+  cv.width = staticLayer.width = w;
+  cv.height = staticLayer.height = h;
+  const g = staticContext;
+  g.setTransform(d, 0, 0, d, 0, 0);
+  const width = w / d, height = h / d;
+  g.fillStyle = '#090909';
+  g.fillRect(0, 0, width, height);
+  if (mode === 'spec') return { d, w, h, ...spectrumArtwork(g, width, height) };
+  const skin = VU_SKINS[skinIndex(look.vuSkin, VU_SKINS)];
+  const side = wide.matches;
+  const gap = Math.min(12, Math.min(width, height) * .04);
+  const mw = side ? (width - gap) / 2 : width;
+  const mh = side ? height : (height - gap) / 2;
+  const meters = ['L', 'R'].map((ch, i) =>
+    vuArtwork(g, side ? i * (mw + gap) : 0, side ? 0 : i * (mh + gap), mw, mh, ch, skin, d));
+  return { d, w, h, meters };
+}
+
+function panel(g, x, y, w, h) {
+  const metal = g.createLinearGradient(x, y, x, y + h);
+  metal.addColorStop(0, '#938477');
+  metal.addColorStop(.026, '#453a31');
+  metal.addColorStop(.55, '#2d2925');
+  metal.addColorStop(.985, '#171412');
+  metal.addColorStop(1, '#766456');
+  g.fillStyle = metal;
+  g.fillRect(x, y, w, h);
+  g.strokeStyle = '#95816b';
+  g.lineWidth = 1;
+  g.strokeRect(x + .5, y + .5, w - 1, h - 1);
+  g.strokeStyle = '#090806';
+  g.strokeRect(x + 2.5, y + 2.5, w - 5, h - 5);
+  g.fillStyle = '#080909';
+  g.fillRect(x + 5, y + 5, w - 10, h - 10);
+}
+
+const SWING = 47 * Math.PI / 180;
+const angle = p => -SWING + 2 * SWING * p;
+function dialPoint(dial, radius, position) {
+  const a = angle(position);
+  return [dial.px + radius * Math.sin(a), dial.py - radius * Math.cos(a)];
+}
+function vuArtwork(g, x, y, w, h, ch, skin, d) {
+  const fw = Math.min(w, h * 1.9), fh = fw / 1.9;
+  x += (w - fw) / 2;
+  y += (h - fh) / 2;
+  panel(g, x, y, fw, fh);
+  const inset = Math.max(7, fh * .045);
+  const ix = x + inset, iy = y + inset, iw = fw - 2 * inset, ih = fh - 2 * inset;
+  const dial = { px: ix + iw / 2, py: iy + ih * 1.18, radius: ih * 1.02, skin, d };
+  const plate = iy + ih * .8;
+  const lx = ix + iw - ih * .15, ly = (plate + iy + ih) / 2;
+  Object.assign(dial, { ix, iy, iw, ih, plate, lx, ly });
+
+  const paper = g.createRadialGradient(dial.px, iy + ih * .64, 0, dial.px, iy + ih * .58, iw * .65);
+  skin.paper.forEach((color, i) => paper.addColorStop(i / 2, color));
+  g.fillStyle = paper;
+  g.fillRect(ix, iy, iw, ih);
+  const glass = g.createLinearGradient(0, iy, 0, plate);
+  glass.addColorStop(0, '#ffffff45');
+  glass.addColorStop(.28, '#ffffff00');
+  glass.addColorStop(.92, '#00000000');
+  glass.addColorStop(1, '#00000029');
+  g.fillStyle = glass;
+  g.fillRect(ix, iy, iw, plate - iy);
+
+  const scaleRadius = dial.radius * .8;
+  for (const [from, to, color, weight] of [[0, vuPos(0), skin.ink, .008], [vuPos(0), 1, skin.red, .029]]) {
+    g.beginPath();
+    g.arc(dial.px, dial.py, scaleRadius, angle(from) - Math.PI / 2, angle(to) - Math.PI / 2);
+    g.strokeStyle = color;
+    g.lineWidth = Math.max(1, ih * weight);
+    g.stroke();
+  }
+  g.font = '700 ' + Math.max(8, Math.round(ih * .072)) + 'px Georgia, serif';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  for (const mark of VU_MARKS) {
+    const position = vuPos(mark);
+    const a = dialPoint(dial, scaleRadius, position);
+    const b = dialPoint(dial, dial.radius * .878, position);
+    const label = dialPoint(dial, dial.radius * .96, position);
+    g.strokeStyle = g.fillStyle = mark > 0 ? skin.red : skin.ink;
+    g.lineWidth = Math.max(1, ih * .01);
+    g.beginPath();
+    g.moveTo(...a);
+    g.lineTo(...b);
+    g.stroke();
+    g.fillText(mark > 0 ? '+' + mark : String(Math.abs(mark)), ...label);
+  }
+  g.fillStyle = skin.ink;
+  g.font = '700 ' + Math.round(ih * .15) + 'px Georgia, serif';
+  g.fillText('VU', dial.px, iy + ih * .61);
+  g.font = '700 ' + Math.max(8, Math.round(ih * .057)) + 'px Consolas, monospace';
+  g.textAlign = 'left';
+  g.fillText('CANAL ' + ch, ix + 7, iy + ih * .09);
+  g.textAlign = 'right';
+  g.fillText('DECK 90', ix + iw - 7, iy + ih * .09);
+  g.fillStyle = '#100e0c';
+  g.fillRect(ix, plate, iw, iy + ih - plate);
+  g.strokeStyle = '#080604';
+  g.strokeRect(ix + .5, iy + .5, iw - 1, ih - 1);
+  g.fillStyle = '#a5a096';
+  g.fillText('PEAK', lx - Math.max(6, ih * .055), ly);
+  g.fillStyle = '#4d201d';
+  g.beginPath();
+  g.arc(lx, ly, Math.max(2.5, ih * .023), 0, 2 * Math.PI);
+  g.fill();
+  return dial;
+}
+
+function drawNeedle(dial, value, peak) {
+  const { d, ix, iy, iw, plate, px, py, ih, lx, ly, radius, skin } = dial;
+  cx.save();
+  cx.scale(d, d);
+  cx.save();
+  cx.beginPath();
+  cx.rect(ix + 1, iy + 1, iw - 2, plate - iy - 1);
+  cx.clip();
+  cx.beginPath();
+  cx.moveTo(px, py);
+  cx.lineTo(...dialPoint(dial, radius * .93, vuPos(value)));
+  cx.strokeStyle = skin.needle;
+  cx.lineWidth = Math.max(1.1, ih * .009);
+  cx.stroke();
+  cx.restore();
+  if (peak) {
+    cx.fillStyle = '#ff5b42';
+    cx.shadowColor = '#ff4d29';
+    cx.shadowBlur = 8 * d;
+    cx.beginPath();
+    cx.arc(lx, ly, Math.max(2.5, ih * .023), 0, 2 * Math.PI);
+    cx.fill();
+  }
+  cx.restore();
+}
+
+function spectrumArtwork(g, w, h) {
+  const skin = SPEC_SKINS[skinIndex(look.specSkin, SPEC_SKINS)];
+  panel(g, 0, 0, w, h);
+  const glass = g.createLinearGradient(0, 5, 0, h - 5);
+  glass.addColorStop(0, '#131e1b');
+  glass.addColorStop(.2, '#070d0c');
+  glass.addColorStop(1, '#090e0c');
+  g.fillStyle = glass;
+  g.fillRect(5, 5, w - 10, h - 10);
+  const x0 = 12, y0 = 29, y1 = h - 24, plotW = w - 24, bw = plotW / SB;
+  const rows = Math.max(10, Math.min(32, Math.round((y1 - y0) / 5)));
+  const sh = (y1 - y0) / rows, gap = Math.max(1.4, bw * .19);
+  const columns = Array.from({ length: SB }, (_, k) => x0 + k * bw + gap / 2);
+  const segments = Array.from({ length: rows }, (_, i) => ({
+    y: y1 - (i + 1) * sh + sh * .12,
+    zone: i >= rows * .88 ? 2 : i >= rows * .7 ? 1 : 0
+  }));
+  const ledW = bw - gap, ledH = sh * .76;
+  for (const { y, zone } of segments) {
+    g.fillStyle = skin.colors[zone] + '16';
+    for (const x of columns) g.fillRect(x, y, ledW, ledH);
+  }
+  g.font = '700 9px Consolas, monospace';
+  g.textBaseline = 'middle';
+  g.fillStyle = '#a4beb0';
+  g.textAlign = 'left';
+  g.fillText('ESPECTRO / ' + skin.name, x0, 16);
+  g.textAlign = 'right';
+  g.fillText(SB + ' BANDAS', w - x0, 16);
+  g.fillStyle = '#9aa991';
+  g.textAlign = 'center';
+  for (const [f, text] of SPEC_LABELS) {
+    const half = g.measureText(text).width / 2;
+    const x = x0 + Math.log(f / 40) / Math.log(400) * plotW;
+    g.fillText(text, Math.max(x0 + half, Math.min(w - x0 - half, x)), h - 13);
+  }
+  return { skin, columns, segments, rows, ledW, ledH };
+}
+
+function drawSpectrum({ d, skin, columns, segments, rows, ledW, ledH }) {
+  cx.save();
+  cx.scale(d, d);
+  const lit = new Path2D(), middle = new Path2D(), hot = new Path2D();
+  const zones = [lit, middle, hot];
+  const peaks = new Path2D();
+  for (let k = 0; k < SB; k++) {
+    const count = Math.round(sp.bar[k] * rows);
+    const pk = Math.min(rows - 1, Math.round(sp.peak[k] * rows) - 1);
+    const x = columns[k];
+    for (let i = 0; i < count; i++) {
+      const { y, zone } = segments[i];
+      zones[zone].rect(x, y, ledW, ledH);
+    }
+    if (pk > 0) peaks.rect(x, segments[pk].y, ledW, Math.min(ledH, 1.6));
+  }
+  for (let i = 0; i < zones.length; i++) {
+    cx.fillStyle = skin.colors[i];
+    cx.fill(zones[i]);
+  }
+  cx.fillStyle = skin.peak;
+  cx.shadowColor = skin.peak;
+  cx.shadowBlur = 4 * d;
+  cx.fill(peaks);
+  cx.restore();
+}
+

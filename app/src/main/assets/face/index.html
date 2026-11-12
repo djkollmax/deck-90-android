@@ -14,26 +14,25 @@
     <div class="st-display" id="stDisplay" style="left:28.886%;top:42.857%;width:53.373%;height:27.458%"></div>
     <i class="st-aux" style="left:93.753%;top:53.247%;width:1.299%;height:4.824%"></i>
   </div>
-  <section class="now" id="now">
-    <div class="now-band" id="nowBand">FM1 · 1</div>
+  <section class="now" id="now" aria-label="Sintonía actual">
+    <div class="now-top"><span class="now-band" id="nowBand">FM1 · 1</span><span class="now-q" id="nowQ"></span></div>
     <div class="now-name" id="nowName">DECK 90</div>
     <div class="now-song" id="nowSong"></div>
-    <div class="now-q" id="nowQ"></div>
   </section>
-  <!-- VU and ESPECTRO (face.js draws them): under the station standing up, the whole screen lying down -->
-  <section class="meters" id="meters"><canvas id="mCanvas"></canvas></section>
-  <!-- standing up: the bands and the twelve memories as big keys (face.js fills them) -->
   <section class="pad" id="pad">
-    <div class="pad-views" id="padViews"><button data-v="radio">RADIO</button><button data-v="vu">VU</button><button data-v="spec">ESPECTRO</button></div>
-    <div class="pad-bands" id="padBands"></div>
-    <div class="pad-mems" id="padMems"></div>
+    <div class="pad-bands" id="padBands" aria-label="Bandas"></div>
+    <div class="pad-mems" id="padMems" aria-label="Memorias"></div>
+    <section class="meters" id="meters" aria-label="Medidores">
+      <canvas id="mCanvas" role="button" tabindex="0" aria-label="Cambiar diseño del medidor"></canvas>
+    </section>
+    <div class="pad-views" id="padViews" aria-label="Vistas"><button data-v="radio">RADIO</button><button data-v="vu">VU</button><button data-v="spec">ESPECTRO</button></div>
     <div class="pad-row">
-      <button data-k="prev">◀◀</button><button data-k="sel" class="sel">▶ ❚❚</button><button data-k="next">▶▶</button>
+      <button data-k="prev" aria-label="Anterior">◀◀</button><button data-k="sel" aria-label="Reproducir o pausar" class="sel">▶ ❚❚</button><button data-k="next" aria-label="Siguiente">▶▶</button>
       <button data-k="scan">SCAN</button><button data-k="disp">DISP</button>
     </div>
   </section>
 </main>
-<div id="toast"></div>
+<div id="toast" role="status"></div>
 <script src="dp940-display.js"></script>
 <script src="face.js"></script>
 </body>

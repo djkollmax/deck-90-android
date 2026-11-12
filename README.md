@@ -10,8 +10,9 @@ La radio de [Deck 90](https://github.com/djkollmax/deck-90) en el celular y en e
   el color y el brillo del display. Acostado se ve el frente entero; parado, además, la radio y el tema en grande,
   las bandas y las doce memorias como teclas grandes (una memoria mantenida guarda ahí la que suena).
 - **VU y espectro**: parado, RADIO · VU · ESPECTRO cambian lo que se ve debajo de la radio: las teclas, dos VU de
-  aguja o un analizador de 28 bandas, del sonido que sale por el parlante. Acostado, tocar el display del estéreo
-  pasa a los VU, después al espectro y de vuelta al frente, a pantalla completa.
+  aguja o un analizador de 28 bandas, del sonido que sale por el parlante. Tocar el VU cambia su cara (ÁMBAR,
+  CREMA, HI-FI 90) y tocar el espectro, su color (FL 90, CIAN, ÁMBAR). Acostado, tocar el display del estéreo pasa a
+  los VU, después al espectro y de vuelta al frente, a pantalla completa.
 - **En el auto (Android Auto)**: RADIO FM1… AM con sus memorias; ◀◀ ▶▶ pasan de radio dentro de la banda, y se
   ve el tema que pasa la radio.
 - Las radios salen de [Radio Browser](https://www.radio-browser.info), como en la PC: de cada una se elige la mejor
