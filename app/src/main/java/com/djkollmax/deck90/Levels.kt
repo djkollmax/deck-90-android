@@ -16,56 +16,85 @@ import kotlin.math.sqrt
 
 // The sound as the player sends it to the speakers, measured for the phone's meters: each channel's peak and RMS
 // (0–1, the stereo's meters and the VU) and a spectrum of SPECTRUM_BANDS bands (dB, 40 Hz – 16 kHz, log-spaced, from
-// a 2048-point FFT of the mix with a Hann window, made at most 30 times a second). Read by the page each frame.
+// a 2048-point FFT of the mix with a Hann window). The tap sees the sound when it goes into the audio buffer, a
+// quarter of a second or more before it is heard (lead, from the renderer: TimedAudioRenderer), so it measures in
+// blocks of ~12 ms, stamps each block with when it will be heard, and the page gets the block being heard now: the
+// needles and bars move with the sound, not ahead of it. Buffers are reused: nothing to collect on the audio thread.
 @UnstableApi
 object Levels : TeeAudioProcessor.AudioBufferSink {
     const val SPECTRUM_BANDS = 28
     private const val N = 2048
-    @Volatile private var peakL = 0f; @Volatile private var peakR = 0f
-    @Volatile private var rmsL = 0f; @Volatile private var rmsR = 0f
-    @Volatile private var at = 0L
-    @Volatile private var bands = FloatArray(SPECTRUM_BANDS) { -90f }
+    private const val BLOCK = 512                                    // frames per measured block (~12 ms at 44.1 kHz)
+    private const val RING = 256                                     // blocks kept: ~3 s, more than any lead
     private var encoding = C.ENCODING_INVALID
     private var channels = 2
     private var rate = 44100
-    private val ring = FloatArray(N)
-    private var ringAt = 0
-    private var fftAt = 0L
+
+    // when the sound handed over now will be heard, in ms (the renderer's measure, smoothed)
+    @Volatile var leadMs = 0.0; private set
+    private var leadSeen = false
+    fun lead(ms: Double) {
+        val v = ms.coerceIn(0.0, 3000.0)
+        leadMs = if (!leadSeen) v else leadMs + (v - leadMs) * 0.05
+        leadSeen = true
+    }
+
+    // the blocks: when each is heard (wall clock, ms), its peaks and RMS, and its spectrum
+    private val heardAt = LongArray(RING)
+    private val vals = FloatArray(RING * 4)
+    private val bandsRing = FloatArray(RING * SPECTRUM_BANDS) { -90f }
+    @Volatile private var written = 0L                               // blocks written so far (the next goes at written % RING)
+
+    // the block being filled
+    private var bl = 0f; private var br = 0f; private var sl = 0.0; private var sr = 0.0; private var bf = 0
+    private val sample = FloatArray(N); private var sampleAt = 0     // the last N samples of the mix, for the FFT
+    private var sinceFft = 0
+    private var lastBands = FloatArray(SPECTRUM_BANDS) { -90f }
+    private val re = DoubleArray(N); private val im = DoubleArray(N)
+    private val window = DoubleArray(N) { 0.5 - 0.5 * cos(2 * PI * it / (N - 1)) }
 
     override fun flush(sampleRateHz: Int, channelCount: Int, encoding: Int) {
         this.encoding = encoding; channels = channelCount.coerceAtLeast(1); rate = sampleRateHz.coerceAtLeast(8000)
+        bl = 0f; br = 0f; sl = 0.0; sr = 0.0; bf = 0
     }
 
     override fun handleBuffer(buffer: ByteBuffer) {
         val b = buffer.duplicate().order(ByteOrder.nativeOrder())
         val bytes = when (encoding) { C.ENCODING_PCM_16BIT -> 2; C.ENCODING_PCM_FLOAT -> 4; else -> return }
-        var pl = 0f; var pr = 0f; var sl = 0.0; var sr = 0.0; var frames = 0
+        val now = System.currentTimeMillis()
+        val frameMs = 1000.0 / rate
+        var frame = 0
         while (b.remaining() >= bytes * channels) {
             var mix = 0f
             for (c in 0 until channels) {
                 val v = if (bytes == 2) b.short / 32768f else b.float
                 val a = abs(v)
-                if (c == 0) { pl = max(pl, a); sl += v * v } else if (c == 1) { pr = max(pr, a); sr += v * v }
+                if (c == 0) { bl = max(bl, a); sl += v * v } else if (c == 1) { br = max(br, a); sr += v * v }
                 if (c < 2) mix += v
             }
-            ring[ringAt] = mix / minOf(2, channels); ringAt = (ringAt + 1) % N
-            frames++
+            sample[sampleAt] = mix / minOf(2, channels); sampleAt = (sampleAt + 1) % N
+            frame++; bf++
+            if (bf == BLOCK) close((now + leadMs + frame * frameMs).toLong())
         }
-        if (frames == 0) return
-        if (channels < 2) { pr = pl; sr = sl }
-        peakL = pl.coerceAtMost(1f); peakR = pr.coerceAtMost(1f)
-        rmsL = sqrt(sl / frames).toFloat().coerceAtMost(1f); rmsR = sqrt(sr / frames).toFloat().coerceAtMost(1f)
-        val now = System.currentTimeMillis()
-        at = now
-        if (now - fftAt >= 33) { fftAt = now; bands = spectrum() }
+    }
+
+    // a block done: kept with when it is heard (its end)
+    private fun close(heard: Long) {
+        if (channels < 2) { br = bl; sr = sl }
+        val i = (written % RING).toInt()
+        vals[i * 4] = bl.coerceAtMost(1f); vals[i * 4 + 1] = br.coerceAtMost(1f)
+        vals[i * 4 + 2] = sqrt(sl / bf).toFloat().coerceAtMost(1f); vals[i * 4 + 3] = sqrt(sr / bf).toFloat().coerceAtMost(1f)
+        if (++sinceFft >= 2 || written == 0L) { sinceFft = 0; spectrum(lastBands) }   // ~43 a second
+        System.arraycopy(lastBands, 0, bandsRing, i * SPECTRUM_BANDS, SPECTRUM_BANDS)
+        heardAt[i] = heard
+        written++
+        bl = 0f; br = 0f; sl = 0.0; sr = 0.0; bf = 0
     }
 
     // the last N samples' spectrum, in bands
-    private fun spectrum(): FloatArray {
-        val re = DoubleArray(N); val im = DoubleArray(N)
-        for (i in 0 until N) re[i] = ring[(ringAt + i) % N] * (0.5 - 0.5 * cos(2 * PI * i / (N - 1)))
+    private fun spectrum(out: FloatArray) {
+        for (i in 0 until N) { re[i] = sample[(sampleAt + i) % N] * window[i]; im[i] = 0.0 }
         fft(re, im)
-        val out = FloatArray(SPECTRUM_BANDS)
         val lo = 40.0; val hi = minOf(16000.0, rate / 2.0)
         for (k in 0 until SPECTRUM_BANDS) {
             val f0 = lo * (hi / lo).pow(k.toDouble() / SPECTRUM_BANDS); val f1 = lo * (hi / lo).pow((k + 1.0) / SPECTRUM_BANDS)
@@ -74,7 +103,6 @@ object Levels : TeeAudioProcessor.AudioBufferSink {
             for (i in i0..i1) e = max(e, re[i] * re[i] + im[i] * im[i])
             out[k] = (10 * log10(e / (N * N / 16.0) + 1e-12)).toFloat()   // ≈ dBFS of a sine in that band
         }
-        return out
     }
 
     private fun fft(re: DoubleArray, im: DoubleArray) {
@@ -106,18 +134,39 @@ object Levels : TeeAudioProcessor.AudioBufferSink {
         }
     }
 
-    private fun live() = System.currentTimeMillis() - at <= 400       // nothing sent for a moment: paused, buffering
+    // the block being heard at `now`: the newest whose time has come; -1 when nothing has been heard for 400 ms
+    private fun heard(now: Long): Int {
+        val w = written
+        var k = w - 1
+        val oldest = maxOf(0L, w - RING + 8)                          // leave room for the writer
+        while (k >= oldest) {
+            val i = (k % RING).toInt()
+            val t = heardAt[i]
+            if (t <= now) return if (now - t <= 400) i else -1
+            k--
+        }
+        return -1
+    }
 
     // peaks then RMS: "pl,pr,rl,rr"
-    fun now(): String = if (!live()) "0,0,0,0" else "$peakL,$peakR,$rmsL,$rmsR"
-    fun spectrumNow(): String = if (!live()) "" else bands.joinToString(",") { "%.1f".format(java.util.Locale.ROOT, it) }
+    fun now(at: Long = System.currentTimeMillis()): String {
+        val i = heard(at); if (i < 0) return "0,0,0,0"
+        return "${vals[i * 4]},${vals[i * 4 + 1]},${vals[i * 4 + 2]},${vals[i * 4 + 3]}"
+    }
+    fun spectrumNow(at: Long = System.currentTimeMillis()): String {
+        val i = heard(at); if (i < 0) return ""
+        val sb = StringBuilder(SPECTRUM_BANDS * 6)
+        for (k in 0 until SPECTRUM_BANDS) { if (k > 0) sb.append(','); sb.append(Math.round(bandsRing[i * SPECTRUM_BANDS + k] * 10) / 10f) }
+        return sb.toString()
+    }
 
-    // for the tests: a block of samples straight in
-    internal fun feedForTest(samples: FloatArray, sampleRate: Int, channelCount: Int) {
+    // for the tests: a block of samples straight in, heard right away
+    internal fun feedForTest(samples: FloatArray, sampleRate: Int, channelCount: Int, lead: Double = 0.0) {
+        leadSeen = false; lead(lead)
         flush(sampleRate, channelCount, C.ENCODING_PCM_FLOAT)
         val bb = ByteBuffer.allocate(samples.size * 4).order(ByteOrder.nativeOrder())
         samples.forEach { bb.putFloat(it) }; bb.flip()
-        fftAt = 0; handleBuffer(bb)
+        sinceFft = 1; handleBuffer(bb)
     }
-    internal fun bandsForTest() = bands.copyOf()
+    internal fun bandsForTest(): FloatArray { val i = ((written - 1) % RING).toInt(); return bandsRing.copyOfRange(i * SPECTRUM_BANDS, (i + 1) * SPECTRUM_BANDS) }
 }

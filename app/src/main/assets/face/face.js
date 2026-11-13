@@ -317,7 +317,7 @@ function frame(now) {
     disp.setLevels(f(dl), f(dr));
   }
   if (mode === 'radio') return;
-  const d = window.devicePixelRatio || 1;
+  const d = Math.min(2, window.devicePixelRatio || 1);           // 2× is sharp on a phone; more only costs frames
   if (dirty || artwork?.d !== d) {
     dirty = false;
     artwork = buildArtwork(d);
@@ -545,7 +545,7 @@ function drawSpectrum({ d, skin, columns, segments, rows, ledW, ledH }) {
   cx.scale(d, d);
   const lit = new Path2D(), middle = new Path2D(), hot = new Path2D();
   const zones = [lit, middle, hot];
-  const peaks = new Path2D();
+  const peaks = new Path2D(), halo = new Path2D();
   for (let k = 0; k < BARS; k++) {
     const count = Math.round(sp.bar[k] * rows);
     const pk = Math.min(rows - 1, Math.round(sp.peak[k] * rows) - 1);
@@ -554,16 +554,15 @@ function drawSpectrum({ d, skin, columns, segments, rows, ledW, ledH }) {
       const { y, zone } = segments[i];
       zones[zone].rect(x, y, ledW, ledH);
     }
-    if (pk > 0) peaks.rect(x, segments[pk].y, ledW, Math.min(ledH, 3));
+    if (pk > 0) { const y = segments[pk].y, h = Math.min(ledH, 3); peaks.rect(x, y, ledW, h); halo.rect(x - 1.5, y - 2, ledW + 3, h + 4); }
   }
   for (let i = 0; i < zones.length; i++) {
     cx.fillStyle = skin.colors[i];
     cx.fill(zones[i]);
   }
-  cx.fillStyle = skin.peak;
-  cx.shadowColor = skin.peak;
-  cx.shadowBlur = 4 * d;
-  cx.fill(peaks);
+  cx.fillStyle = skin.peak;                                          // the peaks' glow: a soft halo, not a blur (a
+  cx.globalAlpha = .28; cx.fill(halo);                               // shadow blur costs the whole width every frame)
+  cx.globalAlpha = 1; cx.fill(peaks);
   cx.restore();
 }
 

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.2
+
+- The meters move with the sound that is heard, not ahead of it: the tap sees the sound when it goes into the audio
+  buffer (a quarter of a second or more early; more over Bluetooth), so Levels measures in ~12 ms blocks, stamps each
+  with when it is heard (the renderer's buffer time minus its playing position, TimedAudioRenderer) and the page gets
+  the block being heard. The audio thread reuses its buffers (no garbage 40 times a second).
+- The spectrum at 60 frames a second on a mid-range phone (it dropped to 23 full screen): its peaks glow with a halo
+  instead of a canvas blur, and the meters' canvas is drawn at most at 2× the screen's pixels.
+
 ## 0.1.1
 
 - SLEEP: PWR held steps 15 → 30 → 60 → 90 minutes → off; the radio fades out over its last 10 seconds and pauses.

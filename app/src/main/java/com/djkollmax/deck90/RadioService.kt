@@ -1,5 +1,13 @@
 package com.djkollmax.deck90
 
+import android.os.Handler
+import androidx.media3.common.Format
+import androidx.media3.exoplayer.Renderer
+import androidx.media3.exoplayer.audio.AudioRendererEventListener
+import androidx.media3.exoplayer.audio.MediaCodecAudioRenderer
+import androidx.media3.exoplayer.mediacodec.MediaCodecAdapter
+import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
+import java.nio.ByteBuffer
 import android.content.Context
 import android.net.Uri
 import android.os.Bundle
@@ -146,6 +154,27 @@ class RadioService : MediaLibraryService() {
     private class MeterRenderers(context: Context) : DefaultRenderersFactory(context) {
         override fun buildAudioSink(context: Context, enableFloatOutput: Boolean, enableAudioTrackPlaybackParams: Boolean): AudioSink =
             DefaultAudioSink.Builder(context).setAudioProcessors(arrayOf(TeeAudioProcessor(Levels))).build()
+
+        override fun buildAudioRenderers(context: Context, extensionRendererMode: Int, mediaCodecSelector: MediaCodecSelector,
+            enableDecoderFallback: Boolean, audioSink: AudioSink, eventHandler: Handler, eventListener: AudioRendererEventListener,
+            out: ArrayList<Renderer>) {
+            out.add(TimedAudioRenderer(context, codecAdapterFactory, mediaCodecSelector, enableDecoderFallback, eventHandler, eventListener, audioSink))
+        }
+    }
+
+    // the platform's decoders, as the factory's own, telling Levels how far ahead of the ear the sound goes into the
+    // sink: a buffer's time minus the time being heard (both on the renderer's clock, which follows the speakers)
+    private class TimedAudioRenderer(context: Context, codecs: MediaCodecAdapter.Factory, selector: MediaCodecSelector, fallback: Boolean,
+        handler: Handler, listener: AudioRendererEventListener, sink: AudioSink) :
+        MediaCodecAudioRenderer(context, codecs, selector, fallback, handler, listener, sink) {
+        override fun processOutputBuffer(positionUs: Long, elapsedRealtimeUs: Long, codec: MediaCodecAdapter?, buffer: ByteBuffer?,
+            bufferIndex: Int, bufferFlags: Int, sampleCount: Int, bufferPresentationTimeUs: Long, isDecodeOnlyBuffer: Boolean,
+            isLastBuffer: Boolean, format: Format): Boolean {
+            val done = super.processOutputBuffer(positionUs, elapsedRealtimeUs, codec, buffer, bufferIndex, bufferFlags, sampleCount,
+                bufferPresentationTimeUs, isDecodeOnlyBuffer, isLastBuffer, format)
+            if (done && !isDecodeOnlyBuffer && state == Renderer.STATE_STARTED) Levels.lead((bufferPresentationTimeUs - positionUs) / 1000.0)
+            return done
+        }
     }
 }
 
