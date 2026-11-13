@@ -62,6 +62,9 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - uses: actions/download-artifact@v7
         with:
           name: apk
@@ -70,6 +73,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           V: ${{ needs.build.outputs.version }}
         run: |
+          sh scripts/notes.sh "$V" > notes.md                # NOVEDADES.md's section, CHANGELOG.md's under it
+          cat notes.md
           gh release create "v$V" -R "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "Deck 90 para Android $V" \
-            --notes "Deck 90 para Android $V. Se instala y se actualiza con Obtainium (github.com/djkollmax/deck-90-android)." \
-            "deck-90-android-$V.apk"
+            --notes-file notes.md "deck-90-android-$V.apk"

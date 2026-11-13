@@ -1,0 +1,46 @@
+# Novedades
+
+## 0.1.3 — 2026-11-13
+
+### Arreglos
+- **Los vúmetros del estéreo ya no se cortan cada unos segundos.** Cuando cambiaba la línea de abajo de la sintonía
+  (el tema y la radio se alternan), bajaban a cero un instante y volvían a subir. Ahora se quedan firmes, y el
+  display redibuja solo lo que cambió.
+- **Al cambiar de radio** ya no aparece por un instante en los vúmetros el sonido de la radio anterior.
+
+### Cambios
+- **Menos batería:** con otra app adelante o la pantalla apagada, la pantalla de la radio deja de dibujarse. La radio
+  sigue sonando igual.
+
+## 0.1.2 — 2026-11-12
+
+### Arreglos
+- **Los vúmetros y el espectro van con el sonido que escuchás**, no un cuarto de segundo antes (más con Bluetooth):
+  cada medición espera el momento en que ese sonido sale por el parlante.
+- **El espectro fluido:** a pantalla completa, acostado, se trababa en celulares de gama media. Ahora va a 60 cuadros
+  por segundo.
+
+## 0.1.1 — 2026-11-12
+
+### Nuevo
+- **Apagado automático (SLEEP):** mantené PWR un segundo y elegís 15, 30, 60 o 90 minutos, o sin apagado. Al final
+  la radio baja sola en 10 segundos y se apaga, aunque la pantalla esté apagada. Los minutos que faltan se ven en el
+  display.
+
+### Arreglos
+- **SCAN mantenido en las teclas de abajo** (celular parado y tablet) abre la búsqueda de radios del mundo, como en
+  el frente del estéreo.
+
+## 0.1.0 — 2026-11-12
+
+### Nuevo
+- **La radio de Deck 90 en el celular, la tablet y el auto:** las mismas bandas y memorias que en la PC (FM1 a FM5,
+  HI-FI y AM, doce memorias por banda), con la mejor calidad que transmite cada radio.
+- **El frente del estéreo del auto con su display,** con las mismas teclas que en la PC: SDM con sus 36 colores y
+  looks, HDB, DISP (hora, temperatura, tiempo), A.MEM, SCAN, VOL, ATT y PWR.
+- **Buscar cualquier radio del mundo:** SCAN mantenido, por nombre y país.
+- **VU y espectro** del sonido que sale por el parlante: dos VU de aguja con tres caras y un espectro con tres
+  colores.
+- **Celular parado:** la radio y el tema en grande, y las bandas y memorias como teclas grandes.
+- **Tablet:** todo más grande en cualquier posición; acostada suma ESTÉREO, el frente solo a pantalla completa.
+- **Android Auto:** las bandas y las memorias en la pantalla del auto, con el tema que pasa la radio.
