@@ -77,3 +77,10 @@ jobs:
           cat notes.md
           gh release create "v$V" -R "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "Deck 90 para Android $V" \
             --notes-file notes.md "deck-90-android-$V.apk"
+          # the versions already out get their notes from NOVEDADES.md too (the first ones were published without)
+          for t in $(grep -oE '^## [0-9]+\.[0-9]+\.[0-9]+' NOVEDADES.md | cut -c4-); do
+            [ "$t" = "$V" ] && continue
+            gh release view "v$t" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 || continue
+            sh scripts/notes.sh "$t" > "notes-$t.md"
+            gh release edit "v$t" -R "$GITHUB_REPOSITORY" --notes-file "notes-$t.md"
+          done

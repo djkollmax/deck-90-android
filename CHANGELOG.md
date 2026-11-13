@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.4
+
+- DISP's weather where the phone is: its approximate location (ACCESS_COARSE_LOCATION, asked for the first time DISP
+  shows the temperature), rounded to about a kilometre before it goes to Open-Meteo, every 15 minutes so it follows a
+  trip; the place's name from Android's geocoder; the last place kept for when location is off. No fixed place left.
+- The release job writes every published version's notes from NOVEDADES.md (the first four had none).
+- The display synced from Deck 90 7.10.19 (patch "steady").
+
 ## 0.1.3
 
 - The stereo's meters no longer drop for an instant when the line under the tuning changes (every 4 s, between the
@@ -49,7 +57,7 @@
   ESTÉREO, the face alone as big as it fits (the display's tap goes RADIO → VU → ESPECTRO → ESTÉREO).
 - The stereo's keys as on the PC (src/ui/stereo/stereo.js): SDM through the PC's 6 lights and 30 looks (the three
   that change the whole front too; held, the one before), HDB its four brightnesses, DISP NORMAL · HORA ·
-  TEMPERATURA · HORA Y TEMPERATURA · TIEMPO (the weather from Open-Meteo for Quilmes), the radio line taking turns
+  TEMPERATURA · HORA Y TEMPERATURA · TIEMPO (the weather from Open-Meteo), the radio line taking turns
   between the song and the station, VOL ▲ one step and ▼ three with the volume big on the display, PWR off and on,
   the PC's toasts. SCAN held opens the world radio search (Radio Browser, by name and country); a station found
   plays as a tuned station and the numbers keep it in the band.

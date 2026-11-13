@@ -1,5 +1,13 @@
 # Novedades
 
+## 0.1.4 — 2026-11-13
+
+### Cambios
+- **La temperatura de donde estés:** DISP en TEMPERATURA (o HORA Y TEMPERATURA) muestra el clima de donde está el
+  celular, con el nombre del lugar, y lo sigue si viajás. La primera vez pide la ubicación aproximada: alcanza con la
+  ciudad. Si no la das, DISP dice NO WEATHER.
+- **Las notas de cada versión en GitHub** dicen qué cambió, también las de las versiones anteriores.
+
 ## 0.1.3 — 2026-11-13
 
 ### Arreglos

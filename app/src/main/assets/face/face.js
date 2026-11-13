@@ -22,7 +22,7 @@ const ST_KEYS = [   // [key, left %, top %, width %, height %, round]: Deck 90's
 const el = id => document.getElementById(id);
 const app = window.Deck90Android || {                              // a browser: a stand-in, for a look at the face
   state: () => JSON.stringify({ band: 'FM1', slot: 3, freq: '95.1', station: 'Metro', song: 'Un tema de prueba', playing: true, power: true, quality: 'AAC 128',
-    memories: ['Aspen', '80s80s', 'Metro', 'Rock & Pop', 'La 100', 'Vorterix', '', '', '', '', '', ''], wx: { t: 24.3, max: 28, min: 17, place: 'Quilmes' } }),
+    memories: ['Aspen', '80s80s', 'Metro', 'Rock & Pop', 'La 100', 'Vorterix', '', '', '', '', '', ''], wx: { t: 24.3, max: 28, min: 17, place: 'Buenos Aires' } }),
   search: (q, cc) => setTimeout(() => faceFound([{ name: 'Radio de prueba ' + (q || cc), url: 'http://x', codec: 'FLAC', bitrate: 0, cc: cc || 'AR', place: 'Buenos Aires' },
     { name: 'Otra radio', url: 'http://y', codec: 'MP3', bitrate: 128, cc: 'UY', place: '' }]), 300),
   tune: j => toast('sintonizo ' + JSON.parse(j).name),
@@ -112,6 +112,7 @@ function lookApply() {
   try { localStorage.setItem('deck90-face', JSON.stringify(look)); } catch (_) {}
 }
 lookApply();
+if (/temp/.test(look.disp)) setTimeout(() => app.key('weather', false), 1500);   // DISP left on the temperature
 
 function key(k, hold) {
   if (k === 'view') { viewNext(); return; }
@@ -124,6 +125,7 @@ function key(k, hold) {
   if (k === 'hdb') { look.dimI = (look.dimI + 1) % STEREO_DIM.length; lookApply(); toast('HDB · brillo ' + STEREO_DIM_NAME[look.dimI], 1200); return; }
   if (k === 'disp') {
     look.disp = STEREO_DISP[(STEREO_DISP.indexOf(look.disp) + 1) % STEREO_DISP.length]; lookApply();
+    if (/temp/.test(look.disp)) app.key('weather', false);           // the temperature where the phone is: the app asks
     toast('DISP · ' + STEREO_DISP_NAME[look.disp] + (look.disp === 'time' ? ' (la radio es en vivo)' : ''), 1500);
     read.last = ''; read(); return;
   }
@@ -203,8 +205,8 @@ function dispText(s) {
   return '';
 }
 function context(s) {
-  if (look.disp === 'temp' && wxTemp(s) && s.wx.place)
-    return s.wx.place + (typeof s.wx.max === 'number' ? ' · ↑' + Math.round(s.wx.max) + '° ↓' + Math.round(s.wx.min) + '°' : '');
+  if (look.disp === 'temp' && wxTemp(s))
+    return (s.wx.place || 'TEMPERATURE') + (typeof s.wx.max === 'number' ? ' · ↑' + Math.round(s.wx.max) + '° ↓' + Math.round(s.wx.min) + '°' : '');
   return s.station ? (s.freq ? s.band + ' ' + s.freq + ' · ' : '') + s.station : s.band;
 }
 // the display told only what changed. setPlayback(false) zeroes its meters, so it is called once (it is already in

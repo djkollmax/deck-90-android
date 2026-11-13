@@ -41,6 +41,17 @@ class Store(context: Context) {
         set(v) { p.edit().putBoolean("onTuned", v).apply() }
     fun current(): Station? = if (onTuned) tuned else station(band, slot)
 
+    // the weather's last place (rounded, about a kilometre), and whether the location was asked for already
+    fun lastPlace(): Pair<Double, Double>? {
+        val la = p.getString("wxLat", null)?.toDoubleOrNull() ?: return null
+        val lo = p.getString("wxLon", null)?.toDoubleOrNull() ?: return null
+        return la to lo
+    }
+    fun lastPlace(lat: Double, lon: Double) { p.edit().putString("wxLat", lat.toString()).putString("wxLon", lon.toString()).apply() }
+    var askedLocation: Boolean
+        get() = p.getBoolean("askedLocation", false)
+        set(v) { p.edit().putBoolean("askedLocation", v).apply() }
+
     // the address that played last for a station (by its search), and forgetting it when it stops answering
     fun resolved(st: Station): String? = p.getString("url." + key(st), null)
     fun resolvedSet(st: Station, url: String?) {

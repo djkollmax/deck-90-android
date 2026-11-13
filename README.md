@@ -35,7 +35,8 @@ Son las mismas que en la PC:
 - **SCAN mantenido** abre la búsqueda de radios del mundo, por nombre y país. La que tocás suena, y los números de
   abajo la guardan en la banda.
 - **VOL ▲** sube de a un paso y **▼** de a tres. **ATT** silencia. El volumen se ve grande en el display.
-- **DISP** cambia lo que muestra: NORMAL, HORA, TEMPERATURA, HORA Y TEMPERATURA y TIEMPO.
+- **DISP** cambia lo que muestra: NORMAL, HORA, TEMPERATURA (la de donde estés; la primera vez pide la ubicación
+  aproximada), HORA Y TEMPERATURA y TIEMPO.
 - **SDM** recorre los 36 colores y looks del display de la PC, incluidos los que cambian el frente entero (TOKIO,
   ESTUDIO, TITANIO). Mantenido, vuelve al anterior.
 - **HDB** cambia entre cuatro brillos.

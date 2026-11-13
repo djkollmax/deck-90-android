@@ -231,6 +231,7 @@ class MainActivity : AppCompatActivity() {
             }
             k == "mode" -> toast("MODE · RADIO por internet · el servidor de música llega en la próxima versión")
             k == "eject" || k == "slot" -> toast("Este estéreo no tiene CD: la radio es por internet")
+            k == "weather" -> wantWeather()
         }
         web.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
         refresh()
@@ -251,25 +252,79 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // the weather for DISP (Open-Meteo: free, no key, CC BY 4.0), Quilmes, every 15 minutes; only numbers come back
+    // the weather for DISP (Open-Meteo: free, no key, CC BY 4.0) where the phone is: its approximate location (the
+    // city is enough), asked for the first time DISP shows the temperature; every 15 minutes, so it follows a trip. The
+    // place is rounded to about a kilometre before it leaves the phone; its name comes from the phone's own geocoder.
+    // Without the permission, or with location off, the last place known is used, or none: DISP says NO WEATHER.
+    private fun located() = checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+
     private val weather = object : Runnable {
         override fun run() {
-            Thread {
-                runCatching {
-                    val c = java.net.URL("https://api.open-meteo.com/v1/forecast?latitude=-34.72&longitude=-58.25" +
-                        "&current=temperature_2m&daily=temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=1").openConnection() as java.net.HttpURLConnection
-                    c.connectTimeout = 10000; c.readTimeout = 10000
-                    c.setRequestProperty("User-Agent", "Deck90-Android/" + BuildConfigInfo.version)
-                    val o = JSONObject(c.inputStream.bufferedReader().use { it.readText() })
-                    val d = o.getJSONObject("daily")
-                    wx = JSONObject().put("t", o.getJSONObject("current").getDouble("temperature_2m"))
-                        .put("max", d.getJSONArray("temperature_2m_max").getDouble(0)).put("min", d.getJSONArray("temperature_2m_min").getDouble(0))
-                        .put("place", "Quilmes")
-                    main.post { refresh() }
-                }
-            }.start()
+            main.removeCallbacks(this)
+            if (located()) whereNow { lat, lon -> fetchWeather(lat, lon) }
+            else store.lastPlace()?.let { (lat, lon) -> fetchWeather(lat, lon) }
             main.postDelayed(this, 15 * 60_000L)
         }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun whereNow(then: (Double, Double) -> Unit) {
+        val lm = getSystemService(Context.LOCATION_SERVICE) as android.location.LocationManager
+        val known = listOf(android.location.LocationManager.NETWORK_PROVIDER, android.location.LocationManager.PASSIVE_PROVIDER)
+            .mapNotNull { runCatching { lm.getLastKnownLocation(it) }.getOrNull() }.maxByOrNull { it.time }
+        val fresh = known != null && System.currentTimeMillis() - known.time < 30 * 60_000L
+        if (fresh) { then(known!!.latitude, known.longitude); return }
+        val provider = android.location.LocationManager.NETWORK_PROVIDER
+        if (!runCatching { lm.isProviderEnabled(provider) }.getOrDefault(false)) {
+            (known?.let { it.latitude to it.longitude } ?: store.lastPlace())?.let { (a, b) -> then(a, b) }; return
+        }
+        androidx.core.location.LocationManagerCompat.getCurrentLocation(lm, provider, null as android.os.CancellationSignal?,
+            androidx.core.content.ContextCompat.getMainExecutor(this)) { loc ->
+            val p = loc?.let { it.latitude to it.longitude } ?: known?.let { it.latitude to it.longitude } ?: store.lastPlace()
+            p?.let { (a, b) -> then(a, b) }
+        }
+    }
+
+    private fun fetchWeather(lat: Double, lon: Double) {
+        val la = Math.round(lat * 100) / 100.0; val lo = Math.round(lon * 100) / 100.0   // about a kilometre
+        store.lastPlace(la, lo)
+        Thread {
+            runCatching {
+                val c = java.net.URL("https://api.open-meteo.com/v1/forecast?latitude=$la&longitude=$lo" +
+                    "&current=temperature_2m&daily=temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=1").openConnection() as java.net.HttpURLConnection
+                c.connectTimeout = 10000; c.readTimeout = 10000
+                c.setRequestProperty("User-Agent", "Deck90-Android/" + BuildConfigInfo.version)
+                val o = JSONObject(c.inputStream.bufferedReader().use { it.readText() })
+                val d = o.getJSONObject("daily")
+                wx = JSONObject().put("t", o.getJSONObject("current").getDouble("temperature_2m"))
+                    .put("max", d.getJSONArray("temperature_2m_max").getDouble(0)).put("min", d.getJSONArray("temperature_2m_min").getDouble(0))
+                    .put("place", placeName(la, lo))
+                main.post { refresh() }
+            }
+        }.start()
+    }
+
+    // the town's name, from the phone (Android's geocoder); "" when it has none
+    @Suppress("DEPRECATION")
+    private fun placeName(lat: Double, lon: Double): String = runCatching {
+        if (!android.location.Geocoder.isPresent()) return ""
+        val a = android.location.Geocoder(this, java.util.Locale("es")).getFromLocation(lat, lon, 1)?.firstOrNull() ?: return ""
+        (a.locality ?: a.subAdminArea ?: a.adminArea ?: "").take(24)
+    }.getOrDefault("")
+
+    // DISP chose the temperature: the location is asked for once (Android's own dialog), then the weather comes
+    private fun wantWeather() {
+        if (located()) { if (wx == null) main.post(weather); return }
+        if (store.askedLocation) return
+        store.askedLocation = true
+        toast("DISP · para la temperatura de donde estés, Deck 90 pide tu ubicación aproximada")
+        requestPermissions(arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION), 2)
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != 2) return
+        if (located()) main.post(weather) else toast("Sin la ubicación no hay temperatura: se activa en Ajustes → Apps → Deck 90 → Permisos")
     }
 
     // a station from the world search: played as a tuned station (not a memory)
