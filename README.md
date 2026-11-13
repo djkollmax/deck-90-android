@@ -10,7 +10,9 @@ La radio de [Deck 90](https://github.com/djkollmax/deck-90) en el celular y en e
   de abajo la guardan). VOL ▲ sube de a un paso y ▼ de a tres, ATT silencia, y el volumen se ve grande en el
   display. DISP cambia lo que muestra: NORMAL, HORA, TEMPERATURA (Quilmes), HORA Y TEMPERATURA y TIEMPO. SDM
   recorre los 36 colores y looks del display de la PC (mantenido, el anterior), con los que cambian el frente
-  entero, y HDB sus cuatro brillos. PWR lo apaga y lo prende. Acostado se ve el frente entero; parado, además, la radio y el tema en grande,
+  entero, y HDB sus cuatro brillos. PWR lo apaga y lo prende; mantenido, programa el
+  apagado automático (SLEEP): 15, 30, 60 o 90 minutos, y otra vez para sacarlo. Al final la radio baja sola en 10
+  segundos y se apaga, aunque la pantalla esté apagada. Acostado se ve el frente entero; parado, además, la radio y el tema en grande,
   las bandas y las doce memorias como teclas grandes (una memoria mantenida guarda ahí la que suena).
 - **En la tablet**: lo mismo que en el celular parado, en cualquier posición: acostada, el frente arriba y las
   memorias en dos filas de seis, con letras y teclas más grandes. Acostada suma **ESTÉREO**: el frente solo, lo

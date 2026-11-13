@@ -2,6 +2,9 @@
 
 ## 0.1.1
 
+- SLEEP: PWR held steps 15 → 30 → 60 → 90 minutes → off; the radio fades out over its last 10 seconds and pauses.
+  It runs with the player in the service (screen off or app closed too); the minutes left take turns with the
+  quality in the display's corner and show under the station. PWR off cancels it.
 - SCAN held on the bottom keys (standing up, and the tablet) opens the world radio search too, as SCAN held on the
   stereo's face does.
 

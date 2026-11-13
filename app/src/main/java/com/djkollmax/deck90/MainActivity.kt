@@ -37,7 +37,7 @@ import org.json.JSONObject
 //  radio through the player's session, its keys as on the PC (src/ui/stereo/stereo.js): SEL play/pause, BAND the
 //  next band (held: A.MEM, then a number keeps the station there), 1–6 the memories (held 7–12), ◀◀ ▶▶ the band's
 //  stations, SCAN 8 s of each (held: any station in the world, the face's search), VOL ▲ one step and ▼ three, ATT
-//  silence (the volume big on the display for 2 s), PWR off and on. DISP, HDB and SDM are the face's own. The page
+//  silence (the volume big on the display for 2 s), PWR off and on (held: SLEEP, 15 → 30 → 60 → 90 minutes → off). DISP, HDB and SDM are the face's own. The page
 //  asks for the state (state()), the meters (levels(), spectrum()) and searches (search()), and sends the keys
 //  (key()) and the station chosen (tune()).
 // ═══════════════════════════════════════
@@ -106,7 +106,7 @@ class MainActivity : AppCompatActivity() {
     // what the face shows, made on the main thread (the page reads it from its own)
     private var seen = -1
     private val ticker = object : Runnable {
-        override fun run() { if (Now.version != seen || flashUntil > 0) refresh(); main.postDelayed(this, 250) }
+        override fun run() { if (Now.version != seen || flashUntil > 0 || Sleep.at != 0L) refresh(); main.postDelayed(this, 250) }
     }
 
     private fun refresh() {
@@ -125,7 +125,7 @@ class MainActivity : AppCompatActivity() {
             .put("station", st?.name ?: "").put("song", Now.song).put("cc", st?.cc ?: "")
             .put("playing", playing).put("buffering", buffering).put("error", if (playing) "" else Now.error)
             .put("mono", band == "AM" && !tuned).put("quality", quality(c))
-            .put("memo", now < memo).put("scan", scanning).put("power", power).put("flash", flash)
+            .put("memo", now < memo).put("scan", scanning).put("power", power).put("flash", flash).put("sleep", Sleep.left(now))
             .put("memories", JSONArray(store.memories(band).map { it?.name ?: "" }))
             .put("wx", wx ?: JSONObject.NULL)
             .toString()
@@ -175,8 +175,17 @@ class MainActivity : AppCompatActivity() {
         if (k != "scan" && scanning) { scanning = false; main.removeCallbacks(scan) }
         val audio = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         when {
+            k == "pwr" && hold -> {
+                val m = Sleep.step()
+                flash = if (m > 0) "SLEEP $m" else "SLEEP OFF"; flashUntil = System.currentTimeMillis() + 2000
+                toast(if (m > 0) "SLEEP · la radio se apaga sola en $m minutos, a las " +
+                    java.text.SimpleDateFormat("HH:mm", java.util.Locale.ROOT).format(java.util.Date(Sleep.at)) +
+                    " (PWR apretado otra vez: más tiempo o sin apagado)"
+                    else "SLEEP · sin apagado automático")
+            }
             k == "pwr" -> {
                 power = !power
+                if (!power) Sleep.cancel()
                 if (power) { if (c != null && c.mediaItemCount > 0) { c.prepare(); c.play() } else tune(store.band, store.slot) }
                 else c?.pause()
             }

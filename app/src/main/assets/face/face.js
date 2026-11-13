@@ -142,7 +142,7 @@ function key(k, hold) {
       volT = setTimeout(function rep() { key(k); volT = setTimeout(rep, 100); }, 350);
       return;
     }
-    if (/^(m[1-6]|sdm|band|scan)$/.test(k)) holdT = setTimeout(() => { held = true; key(k, true); }, 1000);
+    if (/^(m[1-6]|sdm|band|scan|pwr)$/.test(k)) holdT = setTimeout(() => { held = true; key(k, true); }, 1000);
   });
   const up = () => { clearTimeout(holdT); clearTimeout(volT); face.querySelectorAll('.st-hot.down').forEach(b => b.classList.remove('down')); };
   ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => face.addEventListener(ev, up));
@@ -214,9 +214,11 @@ function read() {
   const live = !!s.playing, extra = dispText(s), off = s.power === false;
   const trouble = s.error ? 'NO SIGNAL' : s.buffering ? 'TUNING…' : '';
   const line = trouble || (!live ? '' : s.song && Math.floor(Date.now() / 4000) % 3 !== 2 ? s.song : s.station || '');
+  // SLEEP: the minutes left take turns with the quality, in its corner of the display
+  const corner = s.sleep > 0 && Math.floor(Date.now() / 4000) % 2 ? 'SLEEP ' + s.sleep : live ? s.quality || '' : '';
   const radio = extra
-    ? { band: '', frequency: extra, preset: s.slot || 1, live, name: context(s), mono: !!s.mono, quality: s.quality || '' }
-    : { band: s.memo ? 'A.MEM' : s.tuned ? '' : s.band, frequency: s.freq || shortName(s.station).toUpperCase(), preset: s.slot || 1, live, name: line, mono: !!s.mono, quality: live ? s.quality || '' : '' };
+    ? { band: '', frequency: extra, preset: s.slot || 1, live, name: context(s), mono: !!s.mono, quality: corner }
+    : { band: s.memo ? 'A.MEM' : s.tuned ? '' : s.band, frequency: s.freq || shortName(s.station).toUpperCase(), preset: s.slot || 1, live, name: line, mono: !!s.mono, quality: corner };
   const key = JSON.stringify([radio, off, s.memories, s.scan, s.slot, s.band]);
   face.classList.toggle('off', off);
   el('stereoView').classList.toggle('aux-on', live);
@@ -224,7 +226,7 @@ function read() {
   read.last = key;
   if (disp) { disp.setPlayback(false); disp.setRadio(radio); }
   padSync(s);
-  el('nowBand').textContent = (s.memo ? 'A.MEM · ' : '') + (s.tuned ? 'MUNDO' + (s.cc ? ' · ' + s.cc : '') : s.band + ' · ' + s.slot + (s.freq ? ' · ' + s.freq : '')) + (s.scan ? ' · SCAN' : '');
+  el('nowBand').textContent = (s.memo ? 'A.MEM · ' : '') + (s.tuned ? 'MUNDO' + (s.cc ? ' · ' + s.cc : '') : s.band + ' · ' + s.slot + (s.freq ? ' · ' + s.freq : '')) + (s.scan ? ' · SCAN' : '') + (s.sleep > 0 ? ' · SLEEP ' + s.sleep + "'" : '');
   el('nowName').textContent = s.station || 'DECK 90';
   el('nowSong').textContent = trouble || s.song || '';
   const q = el('nowQ'); q.textContent = (/FLAC/.test(s.quality || '') ? 'HI-FI · ' : '') + (s.quality || ''); q.classList.toggle('hifi', /FLAC/.test(s.quality || ''));

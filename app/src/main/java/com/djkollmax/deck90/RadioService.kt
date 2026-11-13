@@ -56,6 +56,7 @@ class RadioService : MediaLibraryService() {
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_NETWORK)
             .build()
+        Sleep.attach(player)
         player.addListener(object : Player.Listener {
             override fun onMediaItemTransition(item: MediaItem?, reason: Int) {
                 if (item?.mediaId == Store.TUNED) store.onTuned = true
@@ -88,6 +89,7 @@ class RadioService : MediaLibraryService() {
     }
 
     override fun onDestroy() {
+        Sleep.attach(null)
         session?.run { player.release(); release() }
         session = null
         super.onDestroy()
