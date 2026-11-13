@@ -29,11 +29,20 @@ class LevelsTest {
     @Test fun `the meters show the sound when it is heard, not when it goes into the buffer`() {
         val t0 = System.currentTimeMillis()
         Levels.feedForTest(tone(1024, 0.0, 0.0), rate, 2)            // silence first, heard now
-        Levels.feedForTest(tone(1024, 0.8, 0.8), rate, 2, lead = 300.0) // a loud tone heard 300 ms from now
+        Levels.feedForTest(tone(1024, 0.8, 0.8), rate, 2, lead = 300.0, newStream = false)   // the same stream: heard 300 ms on
         val before = Levels.now(t0 + 100).split(",")[0].toFloat()
-        val after = Levels.now(t0 + 340).split(",")[0].toFloat()
+        val after = Levels.now(t0 + 380).split(",")[0].toFloat()
         assertEquals("before it is heard: still the silence", 0f, before, 0.001f)
         assertEquals("once it is heard: the tone", 0.8f, after, 0.01f)
         assertEquals("long after: nothing", "0,0,0,0", Levels.now(t0 + 2000))
+    }
+
+    @Test fun `a new station drops the old one's blocks that were still to be heard`() {
+        val t0 = System.currentTimeMillis()
+        Levels.feedForTest(tone(1024, 0.2, 0.2), rate, 2)            // heard now (its ~23 ms)
+        Thread.sleep(40)
+        Levels.feedForTest(tone(1024, 0.9, 0.9), rate, 2, lead = 300.0, newStream = false)   // queued for later, then the station changes:
+        Levels.feedForTest(FloatArray(0), rate, 2)                   // flush, nothing new yet
+        assertEquals("the queued loud blocks never show", 0.2f, Levels.now(t0 + 380).split(",")[0].toFloat(), 0.01f)
     }
 }

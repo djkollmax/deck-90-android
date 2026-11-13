@@ -56,6 +56,9 @@ object Levels : TeeAudioProcessor.AudioBufferSink {
     override fun flush(sampleRateHz: Int, channelCount: Int, encoding: Int) {
         this.encoding = encoding; channels = channelCount.coerceAtLeast(1); rate = sampleRateHz.coerceAtLeast(8000)
         bl = 0f; br = 0f; sl = 0.0; sr = 0.0; bf = 0
+        // a new station or a seek: the sound still waiting in the buffer is thrown away, and so are its blocks
+        val now = System.currentTimeMillis()
+        for (i in 0 until RING) if (heardAt[i] > now) heardAt[i] = Long.MAX_VALUE
     }
 
     override fun handleBuffer(buffer: ByteBuffer) {
@@ -161,9 +164,9 @@ object Levels : TeeAudioProcessor.AudioBufferSink {
     }
 
     // for the tests: a block of samples straight in, heard right away
-    internal fun feedForTest(samples: FloatArray, sampleRate: Int, channelCount: Int, lead: Double = 0.0) {
+    internal fun feedForTest(samples: FloatArray, sampleRate: Int, channelCount: Int, lead: Double = 0.0, newStream: Boolean = true) {
         leadSeen = false; lead(lead)
-        flush(sampleRate, channelCount, C.ENCODING_PCM_FLOAT)
+        if (newStream) flush(sampleRate, channelCount, C.ENCODING_PCM_FLOAT)
         val bb = ByteBuffer.allocate(samples.size * 4).order(ByteOrder.nativeOrder())
         samples.forEach { bb.putFloat(it) }; bb.flip()
         sinceFft = 1; handleBuffer(bb)

@@ -207,6 +207,21 @@ function context(s) {
     return s.wx.place + (typeof s.wx.max === 'number' ? ' · ↑' + Math.round(s.wx.max) + '° ↓' + Math.round(s.wx.min) + '°' : '');
   return s.station ? (s.freq ? s.band + ' ' + s.freq + ' · ' : '') + s.station : s.band;
 }
+// the display told only what changed. setPlayback(false) zeroes its meters, so it is called once (it is already in
+// radio mode after); setRadio redraws everything (the big digits, the labels, the footer), so a new song or station
+// line only rewrites that line, and a new corner (quality, SLEEP) only the footer: the meters never stumble
+function dispRadio(radio) {
+  if (disp.state.mode !== 'radio') disp.setPlayback(false);
+  const was = disp.state.radio, text = v => String(v ?? '').replace(/[\u0000-\u001f]/g, ' ').slice(0, 512);
+  const preset = Math.max(1, Math.min(99, Math.trunc(Number(radio.preset) || 1)));
+  const same = was.band === text(radio.band) && was.frequency === text(radio.frequency) && was.preset === preset &&
+    was.live === !!radio.live && was.mono === !!radio.mono;
+  const canLine = disp._artist && typeof disp._renderFooter === 'function';   // the component's own parts (dp940-display.js)
+  if (!same || !canLine) { disp.setRadio(radio); return; }
+  const name = text(radio.name), quality = text(radio.quality).slice(0, 12);
+  if (was.name !== name) { was.name = name; disp._artist.textContent = (was.live ? name : '').toLocaleUpperCase('es').slice(0, 42); }
+  if (was.quality !== quality) { was.quality = quality; disp._renderFooter(); }
+}
 function read() {
   let s;
   try { s = JSON.parse(app.state()); } catch (_) { return; }
@@ -224,7 +239,7 @@ function read() {
   el('stereoView').classList.toggle('aux-on', live);
   if (key === read.last) return;
   read.last = key;
-  if (disp) { disp.setPlayback(false); disp.setRadio(radio); }
+  if (disp) dispRadio(radio);
   padSync(s);
   el('nowBand').textContent = (s.memo ? 'A.MEM · ' : '') + (s.tuned ? 'MUNDO' + (s.cc ? ' · ' + s.cc : '') : s.band + ' · ' + s.slot + (s.freq ? ' · ' + s.freq : '')) + (s.scan ? ' · SCAN' : '') + (s.sleep > 0 ? ' · SLEEP ' + s.sleep + "'" : '');
   el('nowName').textContent = s.station || 'DECK 90';

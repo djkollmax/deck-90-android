@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.3
+
+- The stereo's meters no longer drop for an instant when the line under the tuning changes (every 4 s, between the
+  song and the station): the face called setPlayback(false) before every update, which zeroes the meters, and
+  setRadio, which redraws the whole display. It now sets the mode once and tells the display only what changed: a
+  new line rewrites that line, a new quality or SLEEP the footer, and only a new station or band the whole display.
+- A new station drops the meter readings still queued for the old one's discarded sound.
+- Out of sight (another app, the screen off) the face stops drawing and polling; the radio plays on in the service.
+- The build's actions on their Node 24 versions (checkout v5, setup-java v5, upload-artifact v6, download-artifact v7).
+
 ## 0.1.2
 
 - The meters move with the sound that is heard, not ahead of it: the tap sees the sound when it goes into the audio

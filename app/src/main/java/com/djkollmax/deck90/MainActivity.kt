@@ -82,6 +82,11 @@ class MainActivity : AppCompatActivity() {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)   // the player's notification
     }
 
+    // out of sight (another app, the screen off) the face stops drawing and asking: the radio goes on in the service
+    override fun onResume() { super.onResume(); web.onResume(); web.resumeTimers() }
+    override fun onPause() { web.onPause(); web.pauseTimers(); super.onPause() }
+    override fun onDestroy() { web.destroy(); super.onDestroy() }
+
     override fun onStart() {
         super.onStart()
         val token = SessionToken(this, ComponentName(this, RadioService::class.java))
