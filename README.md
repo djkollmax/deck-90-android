@@ -34,6 +34,9 @@ Son las mismas que en la PC:
 - **◀◀ ▶▶** pasan de radio dentro de la banda. **SCAN** prueba cada una 8 segundos.
 - **SCAN mantenido** abre la búsqueda de radios del mundo, por nombre y país. La que tocás suena, y los números de
   abajo la guardan en la banda.
+- **LOC** (al lado de SCAN) pasa a la banda **LOCAL**: las doce radios más escuchadas de donde estés, que se ponen al
+  día si viajás. LOC otra vez vuelve a la banda de antes. **Mantenida**, abre la búsqueda con todas las de la zona
+  (también **CERCA** en la búsqueda). La primera vez pide la ubicación aproximada.
 - **VOL ▲** sube de a un paso y **▼** de a tres. **ATT** silencia. El volumen se ve grande en el display.
 - **DISP** cambia lo que muestra: NORMAL, HORA, TEMPERATURA (la de donde estés; la primera vez pide la ubicación
   aproximada), HORA Y TEMPERATURA y TIEMPO.
@@ -53,8 +56,9 @@ radio.
 
 ## En el auto (Android Auto)
 
-Las bandas y sus memorias en la pantalla del auto. ◀◀ ▶▶ pasan de radio dentro de la banda, y se ve el tema que pasa
-la radio. Android Auto funciona desde el celular: las tablets no lo tienen.
+Las bandas y sus memorias en la pantalla del auto, y **RADIOS LOCALES**, las de la zona por donde va el auto. ◀◀ ▶▶
+pasan de radio dentro de la banda, y se ve el tema que pasa la radio. Android Auto funciona desde el celular: las
+tablets no lo tienen.
 
 ## Las radios
 
@@ -86,5 +90,6 @@ Android Auto muestra solo las apps de Play Store, salvo que lo habilites una vez
 - Pasar las memorias de radio de la PC al celular.
 - Buscar y elegir radios por voz en Android Auto.
 - Una búsqueda de radios mejor.
+- Ver la radio en la tele desde la tablet, con la tablet apagada.
 - El historial de temas y Last.fm.
 - El ecualizador DE-90.

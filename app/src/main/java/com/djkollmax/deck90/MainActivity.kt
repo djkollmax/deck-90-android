@@ -69,6 +69,7 @@ class MainActivity : AppCompatActivity() {
             settings.javaScriptEnabled = true
             settings.allowFileAccess = false
             settings.mediaPlaybackRequiresUserGesture = true
+            settings.domStorageEnabled = true                        // the face keeps its SDM, HDB, DISP and views
             setBackgroundColor(0xFF000000.toInt())
             webViewClient = object : WebViewClient() {
                 override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? = assets.shouldInterceptRequest(request.url)
@@ -132,6 +133,8 @@ class MainActivity : AppCompatActivity() {
             .put("mono", band == "AM" && !tuned).put("quality", quality(c))
             .put("memo", now < memo).put("scan", scanning).put("power", power).put("flash", flash).put("sleep", Sleep.left(now))
             .put("memories", JSONArray(store.memories(band).map { it?.name ?: "" }))
+            .put("keepBand", Bands.label(keepBand()))
+            .put("town", if (band == Bands.LOCAL) store.localAt()?.optString("town") ?: "" else "")
             .put("wx", wx ?: JSONObject.NULL)
             .toString()
     }
@@ -206,7 +209,7 @@ class MainActivity : AppCompatActivity() {
                 memo = System.currentTimeMillis() + 6000; toast("A.MEM · tocá el 1–6 donde guardarla (mantenelo apretado para el 7–12)")
             }
             k == "band" -> {
-                val next = Bands.order[(Bands.order.indexOf(store.band) + 1) % Bands.order.size]
+                val next = if (store.band == Bands.LOCAL) store.lastBand else Bands.order[(Bands.order.indexOf(store.band) + 1) % Bands.order.size]
                 tune(next, 1); toast("BAND · " + Bands.label(next) + " · doce memorias (1–6, y 7–12 manteniendo apretado)")
             }
             Regex("^m[1-6]$").matches(k) -> {
@@ -214,6 +217,7 @@ class MainActivity : AppCompatActivity() {
                 if (System.currentTimeMillis() < memo) { memo = 0; keep(n) } else tune(store.band, n)
             }
             // the big keys standing up: a band by name, a memory 1–12, a memory held keeps the one playing there
+            k == "band:${Bands.LOCAL}" -> loc(false)
             k.startsWith("band:") -> k.removePrefix("band:").takeIf { it in Bands.order }?.let { b -> tune(b, 1); toast("BAND · " + Bands.label(b)) }
             Regex("^mem(\\d{1,2})$").matches(k) -> tune(store.band, k.removePrefix("mem").toInt().coerceIn(1, Bands.SLOTS))
             Regex("^keep(\\d{1,2})$").matches(k) -> keep(k.removePrefix("keep").toInt().coerceIn(1, Bands.SLOTS))
@@ -232,16 +236,58 @@ class MainActivity : AppCompatActivity() {
             k == "mode" -> toast("MODE · RADIO por internet · el servidor de música llega en la próxima versión")
             k == "eject" || k == "slot" -> toast("Este estéreo no tiene CD: la radio es por internet")
             k == "weather" -> wantWeather()
+            k == "loc" -> loc(hold)
         }
         web.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
         refresh()
     }
 
     // the station playing kept in the band's memory n (A.MEM and a number, or a big key held), and played from there
+    // (playing in LOCAL, it goes to the band BAND was on: LOCAL is made again by LOC)
     private fun keep(n: Int) {
         val now = store.current() ?: run { toast("Primero sintonizá una radio"); return }
-        store.keep(store.band, n, now); toast("GUARDADA EN " + Bands.label(store.band) + " · $n")
-        if (store.onTuned) { store.onTuned = false; store.slot = n; tune(store.band, n) } else tune(store.band, n)
+        val band = keepBand()
+        store.keep(band, n, now); toast("GUARDADA EN " + Bands.label(band) + " · $n")
+        store.onTuned = false; tune(band, n)
+    }
+
+    private fun keepBand() = if (store.band == Bands.LOCAL) store.lastBand else store.band
+
+    // LOC: the radios where the phone is. A touch plays LOCAL (found again if the phone has moved or it's old) or,
+    // already on it, goes back to the band before; held, the whole list of the place in the search
+    private var pendingLoc: Boolean? = null
+    private fun loc(hold: Boolean) {
+        if (!hold && store.band == Bands.LOCAL && !store.onTuned) { tune(store.lastBand, store.lastSlot); toast("LOC · de vuelta a " + Bands.label(store.lastBand)); return }
+        if (!located()) {
+            pendingLoc = hold
+            toast("LOC · para las radios de donde estés, Deck 90 pide tu ubicación aproximada")
+            requestPermissions(arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION), 3)
+            return
+        }
+        if (hold) toast("LOC · buscando las radios de la zona…")
+        whereNow { lat, lon ->
+            if (!hold && !Local.stale(store, lat, lon)) { toLocal(); return@whereNow }
+            if (!hold) toast("LOC · buscando las radios de la zona…")
+            Thread {
+                val (town, found) = runCatching { Local.refresh(this, store, lat, lon) }.getOrDefault("" to emptyList())
+                main.post {
+                    if (hold) { nearList(town, found); return@post }
+                    if (found.isEmpty()) toast("LOC · no encontré radios cerca. Probá con SCAN apretado, por país")
+                    else toLocal()
+                }
+            }.start()
+        }
+    }
+    private fun toLocal() {
+        if (store.band != Bands.LOCAL) store.lastSlot = store.slot
+        tune(Bands.LOCAL, 1)
+        val town = store.localAt()?.optString("town").orEmpty()
+        toast("LOCAL · " + (if (town.isNotEmpty()) "las radios de $town" else "las radios de la zona") + " · LOC otra vez para volver; apretado, la lista entera")
+    }
+    // LOC held: the search opened on the place's radios
+    private fun nearList(town: String, found: List<Found>) {
+        val json = JSONArray(found.map { it.toJson() }).toString()
+        web.evaluateJavascript("window.faceNear&&faceNear(${JSONObject.quote(town)},$json)", null)
     }
 
     private val scan = object : Runnable {
@@ -323,6 +369,12 @@ class MainActivity : AppCompatActivity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 3) {
+            val hold = pendingLoc; pendingLoc = null
+            if (located()) { main.post(weather); if (hold != null) loc(hold) }
+            else toast("Sin la ubicación no hay radios locales: se activa en Ajustes → Apps → Deck 90 → Permisos")
+            return
+        }
         if (requestCode != 2) return
         if (located()) main.post(weather) else toast("Sin la ubicación no hay temperatura: se activa en Ajustes → Apps → Deck 90 → Permisos")
     }

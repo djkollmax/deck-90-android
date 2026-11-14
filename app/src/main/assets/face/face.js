@@ -10,7 +10,8 @@ const ST_KEYS = [   // [key, left %, top %, width %, height %, round]: Deck 90's
   ['sel', 3.598, 46.011, 7.996, 16.141, 1], ['mode', 10.195, 27.829, 6.397, 15.213, 1],
   ['disp', 14.193, 45.269, 5.897, 15.213, 1], ['band', 10.195, 63.636, 6.397, 15.028, 1],
   ['hdb', 20.090, 31.911, 4.698, 16.327, 1], ['sdm', 20.090, 57.143, 4.798, 16.698, 1],
-  ['att', 9.595, 80.891, 6.997, 12.987], ['scan', 17.191, 80.891, 13.493, 12.987],
+  ['att', 9.595, 80.891, 6.997, 12.987],
+  ['scan', 17.191, 80.891, 6.85, 12.987], ['loc', 24.041, 80.891, 6.643, 12.987],   // the MONO · LOC rocker: SCAN on the left, LOC on the right
   ['prev', 31.784, 80.891, 6.697, 12.987], ['next', 38.481, 80.891, 6.697, 12.987],
   ['m1', 46.377, 80.891, 5.997, 12.987], ['m2', 52.374, 80.891, 6.997, 12.987],
   ['m3', 59.970, 80.891, 6.997, 12.987], ['m4', 66.967, 80.891, 6.897, 12.987],
@@ -28,7 +29,7 @@ const app = window.Deck90Android || {                              // a browser:
   tune: j => toast('sintonizo ' + JSON.parse(j).name),
   levels: () => { const t = Date.now() / 300, l = 0.5 + 0.4 * Math.sin(t), r = 0.5 + 0.4 * Math.cos(t * 1.3); return [l, r, l * .35, r * .35].join(','); },
   spectrum: () => { const t = Date.now() / 400; return Array.from({ length: 28 }, (_, k) => (-28 - k * 0.9 + 8 * Math.sin(t + k * .7)).toFixed(1)).join(','); },
-  key: k => toast('tecla ' + k),
+  key: (k, hold) => { if (k === 'loc' && hold) setTimeout(() => faceNear('Mar del Plata', [{ name: 'Radio de la costa', url: 'http://x', codec: 'MP3', bitrate: 128, cc: 'AR', place: 'Mar del Plata' }, { name: 'Onda Atlántica', url: 'http://y', codec: 'AAC', bitrate: 64, cc: 'AR', place: '' }]), 300); else toast('tecla ' + k); },
 };
 const face = el('stFace');
 let disp = null, view = {};
@@ -144,7 +145,7 @@ function key(k, hold) {
       volT = setTimeout(function rep() { key(k); volT = setTimeout(rep, 100); }, 350);
       return;
     }
-    if (/^(m[1-6]|sdm|band|scan|pwr)$/.test(k)) holdT = setTimeout(() => { held = true; key(k, true); }, 1000);
+    if (/^(m[1-6]|sdm|band|scan|pwr|loc)$/.test(k)) holdT = setTimeout(() => { held = true; key(k, true); }, 1000);
   });
   const up = () => { clearTimeout(holdT); clearTimeout(volT); face.querySelectorAll('.st-hot.down').forEach(b => b.classList.remove('down')); };
   ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => face.addEventListener(ev, up));
@@ -158,7 +159,7 @@ function key(k, hold) {
 
 // standing up: the bands and the memories as big keys. A memory held 1 s keeps the station playing there (as
 // A.MEM and a number on the face); a band touched shows its memories and plays its first
-const BANDS = ['FM1', 'FM2', 'FM3', 'FM4', 'FM5', 'HI-FI', 'AM'];
+const BANDS = ['FM1', 'FM2', 'FM3', 'FM4', 'FM5', 'HI-FI', 'AM', 'LOCAL'];   // LOCAL: LOC's, the radios of the place
 (function pad() {
   el('padBands').append(...BANDS.map(b => { const x = document.createElement('button'); x.textContent = b; x.dataset.band = b; return x; }));
   el('padMems').append(...Array.from({ length: 12 }, (_, i) => { const x = document.createElement('button'); x.dataset.m = i + 1; x.innerHTML = '<b>' + (i + 1) + '</b><small>—</small>'; return x; }));
@@ -243,7 +244,7 @@ function read() {
   read.last = key;
   if (disp) dispRadio(radio);
   padSync(s);
-  el('nowBand').textContent = (s.memo ? 'A.MEM · ' : '') + (s.tuned ? 'MUNDO' + (s.cc ? ' · ' + s.cc : '') : s.band + ' · ' + s.slot + (s.freq ? ' · ' + s.freq : '')) + (s.scan ? ' · SCAN' : '') + (s.sleep > 0 ? ' · SLEEP ' + s.sleep + "'" : '');
+  el('nowBand').textContent = (s.memo ? 'A.MEM · ' : '') + (s.tuned ? 'MUNDO' + (s.cc ? ' · ' + s.cc : '') : s.band + (s.town ? ' · ' + s.town.toUpperCase() : '') + ' · ' + s.slot + (s.freq ? ' · ' + s.freq : '')) + (s.scan ? ' · SCAN' : '') + (s.sleep > 0 ? ' · SLEEP ' + s.sleep + "'" : '');
   el('nowName').textContent = s.station || 'DECK 90';
   el('nowSong').textContent = trouble || s.song || '';
   const q = el('nowQ'); q.textContent = (/FLAC/.test(s.quality || '') ? 'HI-FI · ' : '') + (s.quality || ''); q.classList.toggle('hifi', /FLAC/.test(s.quality || ''));
@@ -599,14 +600,16 @@ let rfResults = [], rfBusy = false;
   el('rfKeep').append(...Array.from({ length: 12 }, (_, i) => { const b = document.createElement('button'); b.type = 'button'; b.dataset.m = i + 1; b.textContent = i + 1; return b; }));
 })();
 function finderShown() { return el('rfFind').classList.contains('show'); }
-function finderOpen(on) {
+function finderOpen(on, near) {
   el('rfFind').classList.toggle('show', on);
   if (!on) return;
+  el('rfTitle').textContent = 'BUSCAR RADIO EN EL MUNDO';
+  if (near) return finderKeepSync();
   finderKeepSync();
   setTimeout(() => el('rfName').focus(), 50);
 }
 function finderKeepSync() {
-  el('rfBand').textContent = view.band || 'FM1';
+  el('rfBand').textContent = view.keepBand || view.band || 'FM1';
   el('rfKeep').querySelectorAll('button').forEach(b => { b.disabled = !view.playing; });
 }
 function finderSearch() {
@@ -617,6 +620,14 @@ function finderSearch() {
   el('rfName').blur();
   app.search(q, cc);
 }
+// LOC held: the place's radios, in the search
+window.faceNear = (town, r) => {
+  finderOpen(true, true);
+  el('rfTitle').textContent = 'RADIOS DE ' + (town ? town.toUpperCase() : 'LA ZONA');
+  el('rfName').value = ''; el('rfCountry').value = '';
+  faceFound(r);
+  if (r && !r.length) el('rfMsg').textContent = 'No encontré radios cerca: probá por país';
+};
 window.faceFound = r => {
   rfBusy = false;
   const msg = el('rfMsg');
@@ -639,6 +650,7 @@ function finderRender() {
   }));
 }
 el('rfGo').addEventListener('click', finderSearch);
+el('rfNear').addEventListener('click', () => { el('rfMsg').textContent = 'Buscando las radios de la zona…'; app.key('loc', true); });
 el('rfClose').addEventListener('click', () => finderOpen(false));
 el('rfFind').addEventListener('click', e => { if (e.target.id === 'rfFind') finderOpen(false); });
 el('rfCountry').addEventListener('change', finderSearch);

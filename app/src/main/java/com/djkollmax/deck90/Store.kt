@@ -15,8 +15,23 @@ class Store(context: Context) {
     private val p: SharedPreferences = context.getSharedPreferences("deck90", Context.MODE_PRIVATE)
 
     var band: String
-        get() = p.getString("band", "FM1")!!.let { if (it in Bands.order) it else "FM1" }
-        set(v) { p.edit().putString("band", v).apply() }
+        get() = p.getString("band", "FM1")!!.let { if (it in Bands.all) it else "FM1" }
+        set(v) { p.edit().putString("band", v).apply(); if (v in Bands.order) lastBand = v }
+    // the last of BAND's bands (LOCAL is left with BAND back to it, and A.MEM keeps there what plays in LOCAL)
+    var lastBand: String
+        get() = p.getString("lastBand", "FM1")!!.let { if (it in Bands.order) it else "FM1" }
+        set(v) { p.edit().putString("lastBand", v).apply() }
+
+    var lastSlot: Int
+        get() = p.getInt("lastSlot", 1).coerceIn(1, Bands.SLOTS)
+        set(v) { p.edit().putInt("lastSlot", v.coerceIn(1, Bands.SLOTS)).apply() }
+
+    // LOCAL: its stations, and where they were found (lat, lon, town) and when
+    fun localSet(list: List<Station>, lat: Double, lon: Double, town: String) {
+        p.edit().putString("mem.${Bands.LOCAL}", Bands.listToJson(List(Bands.SLOTS) { list.getOrNull(it) }).toString())
+            .putString("localAt", JSONObject().put("lat", lat).put("lon", lon).put("town", town).put("t", System.currentTimeMillis()).toString()).apply()
+    }
+    fun localAt(): JSONObject? = p.getString("localAt", null)?.let { runCatching { JSONObject(it) }.getOrNull() }
     var slot: Int
         get() = p.getInt("slot", 1).coerceIn(1, Bands.SLOTS)
         set(v) { p.edit().putInt("slot", v.coerceIn(1, Bands.SLOTS)).apply() }
@@ -65,7 +80,7 @@ class Store(context: Context) {
         fun parse(id: String?): Pair<String, Int>? {
             val m = Regex("^st:([A-Z0-9]+):(\\d{1,2})$").matchEntire(id ?: return null) ?: return null
             val band = m.groupValues[1]; val slot = m.groupValues[2].toInt()
-            return if (band in Bands.order && slot in 1..Bands.SLOTS) band to slot else null
+            return if (band in Bands.all && slot in 1..Bands.SLOTS) band to slot else null
         }
         fun uri(band: String, slot: Int): Uri = Uri.parse("deck90://station/$band/$slot")
         const val TUNED = "tuned"                                    // the tuned station's media id; deck90://tuned

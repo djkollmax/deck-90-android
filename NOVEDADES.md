@@ -1,5 +1,22 @@
 # Novedades
 
+## 0.1.5 — 2026-11-13
+
+### Nuevo
+- **SCAN y LOC son dos teclas:** en el frente del estéreo, la mitad izquierda es SCAN (tocada prueba cada radio 8
+  segundos; mantenida, la búsqueda del mundo) y la derecha es LOC.
+- **LOC, las radios de donde estés:** tocada, pasa a la banda **LOCAL**, con las doce radios más escuchadas cerca del
+  celular (la primera vez pide la ubicación aproximada); LOC otra vez vuelve a la banda de antes. Mantenida, abre la
+  búsqueda con todas las radios de la zona. Si viajás, LOCAL se pone al día sola: en Mar del Plata, las de Mar del
+  Plata; en Londres, las de Londres.
+- **RADIOS LOCALES en Android Auto:** una carpeta más, con las de la zona donde va el auto.
+- **CERCA en la búsqueda:** la misma lista de la zona, desde la búsqueda.
+
+### Arreglos
+- **El display recuerda cómo lo dejaste** (SDM, HDB, DISP, la cara de los VU y el color del espectro) aunque se
+  actualice o cierres la app.
+- **La búsqueda ya no muestra radios que no suenan:** las de video y las listas por segmentos (HLS) quedan afuera.
+
 ## 0.1.4 — 2026-11-13
 
 ### Cambios

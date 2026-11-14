@@ -20,6 +20,10 @@ data class Station(val name: String, val freq: String, val q: String, val cc: St
 object Bands {
     const val SLOTS = 12
     val order = listOf("FM1", "FM2", "FM3", "FM4", "FM5", "HIFI", "AM")
+    // LOC's band: the twelve most heard stations near where the phone is (not one of BAND's, made by LOC, kept
+    // until LOC finds the place has changed)
+    const val LOCAL = "LOCAL"
+    val all = order + LOCAL
     fun label(band: String) = if (band == "HIFI") "HI-FI" else band
 
     val defaults: Map<String, List<Station>> = mapOf(

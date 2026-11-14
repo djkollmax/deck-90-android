@@ -36,6 +36,8 @@ import androidx.media3.session.MediaSession
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
+import com.google.common.util.concurrent.MoreExecutors
+import java.util.concurrent.Executors
 import java.io.IOException
 
 // ═══════════════════════════════════════
@@ -46,6 +48,8 @@ import java.io.IOException
 // ═══════════════════════════════════════
 @UnstableApi
 class RadioService : MediaLibraryService() {
+    private val background = MoreExecutors.listeningDecorator(Executors.newSingleThreadExecutor())   // LOCALES' lookups
+
     private lateinit var store: Store
     private lateinit var player: ExoPlayer
     private var session: MediaLibrarySession? = null
@@ -98,6 +102,7 @@ class RadioService : MediaLibraryService() {
 
     override fun onDestroy() {
         Sleep.attach(null)
+        background.shutdownNow()
         session?.run { player.release(); release() }
         session = null
         super.onDestroy()
@@ -114,11 +119,25 @@ class RadioService : MediaLibraryService() {
 
         override fun onGetChildren(session: MediaLibrarySession, browser: MediaSession.ControllerInfo, parentId: String, page: Int, pageSize: Int, params: LibraryParams?): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
             val list = when {
-                parentId == "root" -> Bands.order.map { folder("band:$it", "RADIO " + Bands.label(it)) }
+                parentId == "root" -> Bands.order.map { folder("band:$it", "RADIO " + Bands.label(it)) } + folder("band:${Bands.LOCAL}", "RADIOS LOCALES")
+                parentId == "band:${Bands.LOCAL}" -> return local(params)
                 parentId.startsWith("band:") -> parentId.removePrefix("band:").let { b -> (1..Bands.SLOTS).mapNotNull { store.item(b, it) } }
                 else -> emptyList()
             }
             return Futures.immediateFuture(LibraryResult.ofItemList(ImmutableList.copyOf(list), params))
+        }
+
+        // LOCALES in the car: found again where the phone is now, when it has moved or the list is old (a few seconds,
+        // off the main thread); without the location, the last ones found
+        private fun local(params: LibraryParams?): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
+            val items = { ImmutableList.copyOf((1..Bands.SLOTS).mapNotNull { store.item(Bands.LOCAL, it) }) }
+            val where = Local.lastKnown(this@RadioService)
+            if (where == null || !Local.stale(store, where.latitude, where.longitude))
+                return Futures.immediateFuture(LibraryResult.ofItemList(items(), params))
+            return background.submit<LibraryResult<ImmutableList<MediaItem>>> {
+                runCatching { Local.refresh(this@RadioService, store, where.latitude, where.longitude) }
+                LibraryResult.ofItemList(items(), params)
+            }
         }
 
         override fun onGetItem(session: MediaLibrarySession, browser: MediaSession.ControllerInfo, mediaId: String): ListenableFuture<LibraryResult<MediaItem>> {

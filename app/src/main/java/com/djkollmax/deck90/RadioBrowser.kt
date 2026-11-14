@@ -9,9 +9,10 @@ import java.text.Normalizer
 // A station's stream address from Radio Browser (radio-browser.info: free, no key), as Deck 90 on the PC finds it
 // (electron/main.js radioBrowser, src/core/radio.js radioBest): the host that answered last is asked first, 7 s
 // each; of the answers with the same name, the best quality first (FLAC, then Opus/AAC, then MP3, by bitrate)
-data class Found(val name: String, val url: String, val codec: String, val bitrate: Int, val cc: String = "", val place: String = "") {
+data class Found(val name: String, val url: String, val codec: String, val bitrate: Int, val cc: String = "", val place: String = "", val clicks: Int = 0) {
     fun toJson(): org.json.JSONObject = org.json.JSONObject().put("name", name).put("url", url).put("codec", codec)
         .put("bitrate", bitrate).put("cc", cc).put("place", place)
+    fun station(): Station = Station(name, "", name.take(60), cc, url)
 }
 
 object RadioBrowser {
@@ -39,9 +40,14 @@ object RadioBrowser {
             val o = a.optJSONObject(i) ?: return@mapNotNull null
             val url = o.optString("url_resolved").ifBlank { o.optString("url") }
             val name = o.optString("name").trim()
-            if (name.isEmpty() || !Regex("^https?://", RegexOption.IGNORE_CASE).containsMatchIn(url) || url.length >= 600) null
-            else Found(name.take(80), url, o.optString("codec").take(12), o.optInt("bitrate", 0),
-                o.optString("countrycode").takeIf { Regex("^[A-Z]{2}$").matches(it) } ?: "", o.optString("state").trim().take(40))
+            val codec = o.optString("codec")
+            // what the player can't play: playlists of segments (HLS) and video
+            val unplayable = o.optInt("hls", 0) == 1 || Regex("H\\.?26[45]|VIDEO|MP4V", RegexOption.IGNORE_CASE).containsMatchIn(codec) ||
+                Regex("\\b(720p|1080p|tv)\\b", RegexOption.IGNORE_CASE).containsMatchIn(name)
+            if (name.isEmpty() || unplayable || !Regex("^https?://", RegexOption.IGNORE_CASE).containsMatchIn(url) || url.length >= 600) null
+            else Found(name.take(80), url, codec.take(12), o.optInt("bitrate", 0),
+                o.optString("countrycode").takeIf { Regex("^[A-Z]{2}$").matches(it) } ?: "", o.optString("state").trim().take(40),
+                o.optInt("clickcount", 0))
         }
     }
 
@@ -55,6 +61,32 @@ object RadioBrowser {
         if (name.isEmpty() && country.isEmpty()) return emptyList()
         return ask((if (name.isNotEmpty()) "name=" + URLEncoder.encode(name, "UTF-8") + "&" else "") +
             (if (country.isNotEmpty()) "countrycode=$country&" else "") + "hidebroken=true&order=clickcount&reverse=true&limit=60")
+    }
+
+    // the stations near a place: those Radio Browser knows within 40 km, and those whose region or name says the
+    // town (most stations have no coordinates, only a region): together, the most heard first, each name once
+    fun near(lat: Double, lon: Double, town: String, cc: String): List<Found> {
+        val country = cc.takeIf { Regex("^[A-Z]{2}$").matches(it) }?.let { "countrycode=$it&" } ?: ""
+        val tail = "hidebroken=true&order=clickcount&reverse=true&limit=60"
+        val asks = mutableListOf("geo_lat=${"%.3f".format(java.util.Locale.ROOT, lat)}&geo_long=${"%.3f".format(java.util.Locale.ROOT, lon)}&geo_distance=40000&$tail")
+        val t = town.trim().take(40)
+        if (t.isNotEmpty()) {
+            val q = URLEncoder.encode(t, "UTF-8")
+            asks += "state=$q&$country$tail"; asks += "name=$q&$country$tail"
+        }
+        return merge(asks.map { q -> runCatching { ask(q) }.getOrDefault(emptyList()) })
+    }
+
+    // several answers as one list: the most heard first, a station (by its name without what it says of its
+    // quality) once, the best of its streams kept
+    fun merge(lists: List<List<Found>>): List<Found> {
+        val byName = LinkedHashMap<String, Found>()
+        for (f in lists.flatten()) {
+            val k = base(f.name).lowercase()
+            val was = byName[k]
+            if (was == null || score(f.codec, f.bitrate) > score(was.codec, was.bitrate)) byName[k] = f.copy(clicks = maxOf(f.clicks, was?.clicks ?: 0))
+        }
+        return byName.values.sortedByDescending { it.clicks }.take(60)
     }
 
     private fun ask(query: String): List<Found> {

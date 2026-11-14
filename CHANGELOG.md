@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.5
+
+- SCAN and LOC are two keys on the stereo's face (the rocker's halves): SCAN as before, LOC new.
+- LOC: a LOCAL band with the 12 most-heard stations near the phone (Radio Browser: within 40 km by coordinates, plus
+  the town as region and in the name, merged by name, the best stream of each kept). Refreshed when it is more than
+  12 hours old or the phone is more than 25 km away. LOC tapped goes to LOCAL and back to the band before it; held,
+  the search opens with the whole area's list (also its CERCA key).
+- Android Auto's root gets RADIOS LOCALES (band:LOCAL), refreshed in the background when stale.
+- The WebView keeps localStorage (domStorageEnabled): the face's looks, brightness and DISP survive a restart or an
+  update.
+- Search results skip what the player can't play: HLS, video codecs and TV streams.
+
 ## 0.1.4
 
 - DISP's weather where the phone is: its approximate location (ACCESS_COARSE_LOCATION, asked for the first time DISP

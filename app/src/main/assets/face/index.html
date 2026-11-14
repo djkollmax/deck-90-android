@@ -35,11 +35,12 @@
 <!-- the radio search (SCAN held), as on the PC: face.js fills the countries, the list and the numbers -->
 <div id="rfFind" role="dialog" aria-label="Buscar radio">
   <div class="rf-card">
-    <div class="rf-head"><span>BUSCAR RADIO EN EL MUNDO</span><button type="button" id="rfClose" aria-label="Cerrar">✕</button></div>
+    <div class="rf-head"><span id="rfTitle">BUSCAR RADIO EN EL MUNDO</span><button type="button" id="rfClose" aria-label="Cerrar">✕</button></div>
     <div class="rf-row">
       <label class="rf-name">NOMBRE<input id="rfName" spellcheck="false" autocomplete="off" enterkeyhint="search" placeholder="jazz, BBC, Radio Paradise…"></label>
       <label class="rf-country">PAÍS<select id="rfCountry"></select></label>
       <button type="button" id="rfGo">BUSCAR</button>
+      <button type="button" id="rfNear" title="Las radios de donde estás">CERCA</button>
     </div>
     <div class="rf-msg" id="rfMsg"></div>
     <div id="rfList" class="rf-list" role="listbox"></div>

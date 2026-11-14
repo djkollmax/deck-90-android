@@ -41,4 +41,22 @@ class RadioBrowserTest {
             assertEquals(12, Bands.fresh(b).size)
         }
     }
+
+    @Test fun `the place's radios are the lists merged, each station once with its best stream, the most heard first`() {
+        val geo = listOf(Found("LU6 Atlantica", "http://a", "AAC+", 32, "AR", "", 2), Found("Fresh FM 102.9", "http://b", "MP3", 128, "AR", "", 0))
+        val byState = listOf(Found("Rock and Pop 89.7", "http://c", "MP3", 128, "AR", "", 9), Found("LU6 Atlantica", "http://a2", "MP3", 128, "AR", "", 2))
+        val byName = listOf(Found("Aspen Mar del Plata 89", "http://d", "MP3", 64, "AR", "", 30))
+        val all = RadioBrowser.merge(listOf(geo, byState, byName))
+        assertEquals(listOf("Aspen Mar del Plata 89", "Rock and Pop 89.7", "LU6 Atlantica", "Fresh FM 102.9"), all.map { it.name })
+        assertEquals("the better of LU6's two streams", "http://a2", all.first { it.name == "LU6 Atlantica" }.url)
+    }
+
+    @Test fun `streams the player can't play are left out, HLS and video`() {
+        val found = RadioBrowser.parse("""[
+          {"name":"Radio buena","url":"http://a","codec":"MP3","bitrate":128,"hls":0},
+          {"name":"Segmentos","url":"http://b/x.m3u8","codec":"AAC","bitrate":64,"hls":1},
+          {"name":"BBC News HD (720P)","url":"http://c","codec":"UNKNOWN","bitrate":0},
+          {"name":"Canal","url":"http://d","codec":"AAC,H.264","bitrate":0}]""")
+        assertEquals(listOf("Radio buena"), found.map { it.name })
+    }
 }
