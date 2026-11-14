@@ -1,5 +1,12 @@
 # Novedades
 
+## 0.1.6 — 2026-11-14
+
+### Cambios
+- **LOCAL en el display se prende solo en la banda LOCAL:** en rojo con las radios de donde estás; en las demás bandas
+  queda apagado (antes estaba siempre prendido). Además está un poco más a la derecha, debajo del recuadro de STEREO
+  y MONO.
+
 ## 0.1.5 — 2026-11-13
 
 ### Nuevo

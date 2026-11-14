@@ -218,7 +218,7 @@ function dispRadio(radio) {
   const was = disp.state.radio, text = v => String(v ?? '').replace(/[\u0000-\u001f]/g, ' ').slice(0, 512);
   const preset = Math.max(1, Math.min(99, Math.trunc(Number(radio.preset) || 1)));
   const same = was.band === text(radio.band) && was.frequency === text(radio.frequency) && was.preset === preset &&
-    was.live === !!radio.live && was.mono === !!radio.mono;
+    was.live === !!radio.live && was.mono === !!radio.mono && !!was.local === !!radio.local;
   const canLine = disp._artist && typeof disp._renderFooter === 'function';   // the component's own parts (dp940-display.js)
   if (!same || !canLine) { disp.setRadio(radio); return; }
   const name = text(radio.name), quality = text(radio.quality).slice(0, 12);
@@ -235,8 +235,8 @@ function read() {
   // SLEEP: the minutes left take turns with the quality, in its corner of the display
   const corner = s.sleep > 0 && Math.floor(Date.now() / 4000) % 2 ? 'SLEEP ' + s.sleep : live ? s.quality || '' : '';
   const radio = extra
-    ? { band: '', frequency: extra, preset: s.slot || 1, live, name: context(s), mono: !!s.mono, quality: corner }
-    : { band: s.memo ? 'A.MEM' : s.tuned ? '' : s.band, frequency: s.freq || shortName(s.station).toUpperCase(), preset: s.slot || 1, live, name: line, mono: !!s.mono, quality: corner };
+    ? { band: '', frequency: extra, preset: s.slot || 1, live, name: context(s), mono: !!s.mono, local: s.band === 'LOCAL' && !s.tuned, quality: corner }
+    : { band: s.memo ? 'A.MEM' : s.tuned ? '' : s.band, frequency: s.freq || shortName(s.station).toUpperCase(), preset: s.slot || 1, live, name: line, mono: !!s.mono, local: s.band === 'LOCAL' && !s.tuned, quality: corner };
   const key = JSON.stringify([radio, off, s.memories, s.scan, s.slot, s.band]);
   face.classList.toggle('off', off);
   el('stereoView').classList.toggle('aux-on', live);

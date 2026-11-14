@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.6
+
+- The display's LOCAL lights only in the LOCAL band (setRadio({ local }), from Deck 90 7.10.21's display, patch
+  "local"), centred under the STEREO/MONO box; dark otherwise.
+
 ## 0.1.5
 
 - SCAN and LOC are two keys on the stereo's face (the rocker's halves): SCAN as before, LOC new.
