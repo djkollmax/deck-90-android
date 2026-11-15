@@ -77,10 +77,13 @@ class CdDrive private constructor(private val conn: UsbDeviceConnection, private
         val data = into ?: ByteArray(length)
         var got = 0
         while (got < length) {
-            val n = conn.bulkTransfer(bulkIn, data, offset + got, minOf(CHUNK, length - got), TIMEOUT)
+            val want = minOf(CHUNK, length - got)
+            val n = conn.bulkTransfer(bulkIn, data, offset + got, want, TIMEOUT)
             if (n < 0) { clearHalt(bulkIn); break }
             got += n
-            if (n == 0) break
+            // a short packet ends the data: the drive sent less than asked (READ TOC answers in its own length). Asking
+            // on would read its status as data, wait for a status that never comes and reset the drive
+            if (n < want) break
         }
         val csw = ByteArray(13)
         var r = conn.bulkTransfer(bulkIn, csw, 13, TIMEOUT)

@@ -1,5 +1,12 @@
 # Novedades
 
+## 0.1.8 — 2026-11-14
+
+### Arreglos
+- **El CD se quedaba en LEYENDO y la lectora expulsaba el disco.** Al leer la lista de temas, la app esperaba más
+  datos de los que manda la lectora, y después de esperar la reiniciaba, una y otra vez. Ahora lee la lista entera y
+  sigue. Si algo falla, deja tranquila a la lectora unos segundos antes de volver a probar.
+
 ## 0.1.7 — 2026-11-14
 
 ### Nuevo

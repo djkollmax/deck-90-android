@@ -45,6 +45,9 @@ object Cd {
 
     // the drive and the disc looked at again (blocking: off the main thread). The person's yes to the drive is the
     // activity's (UsbManager's own dialog); without it status is "perm"
+    @Volatile private var failedAt = 0L
+    // after a failure the drive is left alone a while: opening and resetting it over and over upsets it
+    fun resting(now: Long = System.currentTimeMillis()) = status == "error" && now - failedAt < 15_000
     @Synchronized fun refresh(ctx: Context): String {
         val usb = ctx.getSystemService(Context.USB_SERVICE) as UsbManager
         val dev = CdDrive.find(usb)
@@ -74,7 +77,8 @@ object Cd {
             files = Iso(d, data.lba).music(AUDIO).take(999); tracks = emptyList()
             return set(if (files.isEmpty()) "empty" else "files")
         } catch (e: Exception) {
-            forget(); return set("error")
+            android.util.Log.w("Deck90", "CD: " + e)
+            forget(); failedAt = System.currentTimeMillis(); return set("error")
         }
     }
 

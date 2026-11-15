@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.8
+
+- CD: a short packet ends a command's data stage (READ TOC answers fewer bytes than the 804 asked). Reading on took
+  the drive's status as data, waited 10 s for a status that never came and reset the drive, over and over: the face
+  stayed on READING and drives ejected the disc. After a failure the drive is left alone 15 s (Cd.resting).
+
 ## 0.1.7
 
 - USB mode (Usb.kt): a pendrive or any folder picked with Android's folder picker (MODE held); folders with music are

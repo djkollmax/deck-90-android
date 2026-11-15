@@ -444,7 +444,7 @@ class MainActivity : AppCompatActivity() {
         override fun run() {
             main.removeCallbacks(this)
             if (store.mode != "cd") return
-            if (Cd.status != "audio" && Cd.status != "files" || Cd.parse(controller?.currentMediaItem?.mediaId) == null && controller?.isPlaying != true) cdLook(play = false)
+            if (!Cd.resting() && (Cd.status != "audio" && Cd.status != "files" || Cd.parse(controller?.currentMediaItem?.mediaId) == null && controller?.isPlaying != true)) cdLook(play = false)
             main.postDelayed(this, 3000)
         }
     }
