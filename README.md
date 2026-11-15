@@ -43,8 +43,21 @@ Son las mismas que en la PC:
 - **SDM** recorre los 36 colores y looks del display de la PC, incluidos los que cambian el frente entero (TOKIO,
   ESTUDIO, TITANIO). Mantenido, vuelve al anterior.
 - **HDB** cambia entre cuatro brillos.
-- **PWR** apaga y prende. Mantenido, programa el apagado automático (**SLEEP**): 15, 30, 60 o 90 minutos, y otra vez
-  para sacarlo. Al final la radio baja sola en 10 segundos y se apaga, aunque la pantalla esté apagada.
+- **PWR** apaga (GOOD BYE) y prende (HELLO). Mantenido, programa el apagado automático (**SLEEP**): 15, 30, 60 o 90
+  minutos, y otra vez para sacarlo. Al final la radio baja sola en 10 segundos y se apaga, aunque la pantalla esté
+  apagada.
+- **MODE** pasa de la radio a **USB** y al **CD**, y de vuelta a la radio.
+
+## USB y CD
+
+- **USB:** la música de un pendrive enchufado con un adaptador OTG, o de una carpeta del celular o de la tarjeta.
+  **MODE apretado un segundo** la elige. Cada carpeta con música es un disco. ◀◀ ▶▶ pasan de tema, 1 a 6 (y 7 a 12
+  manteniendo) van a un tema, **BAND** pasa de carpeta, **SCAN** es RAND y **LOC** es REP. El display muestra el tema,
+  el artista y el disco de cada archivo, y la calidad (FLAC 24/96, MP3 320).
+- **CD:** una lectora de CD o DVD por USB (OTG). La primera vez Android pregunta si Deck 90 puede usarla. Los CD de
+  música suenan tal cual están en el disco, con los nombres y la tapa de MusicBrainz; los discos con MP3 o FLAC
+  también. **EJECT** abre la lectora. Si la lectora no arranca, le falta corriente: usá un cable en Y o un hub con
+  fuente.
 
 ## En la tablet
 
@@ -56,7 +69,8 @@ radio.
 
 ## En el auto (Android Auto)
 
-Las bandas y sus memorias en la pantalla del auto, y **RADIOS LOCALES**, las de la zona por donde va el auto. ◀◀ ▶▶
+Las bandas y sus memorias en la pantalla del auto, **RADIOS LOCALES** (las de la zona por donde va el auto) y, si
+están, **USB** y **CD** con sus temas. ◀◀ ▶▶
 pasan de radio dentro de la banda, y se ve el tema que pasa la radio. Android Auto funciona desde el celular: las
 tablets no lo tienen.
 

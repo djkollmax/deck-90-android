@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.1.7
+
+- USB mode (Usb.kt): a pendrive or any folder picked with Android's folder picker (MODE held); folders with music are
+  discs (songs in natural name order); the files' tags (ID3, Vorbis, MP4: title, artist, album, cover) replace the
+  names once the player reads them (`replaceMediaItem`). Keys: ◀◀ ▶▶, 1–6/7–12, BAND (held: back), SCAN = RAND,
+  LOC = REP (disc, song, off), EJECT reads the folder again. Android Auto: a USB folder with the discs.
+- CD mode (CdDrive.kt, Cd.kt): a CD/DVD drive on USB OTG, spoken to directly (bulk-only mass storage, SCSI MMC: INQUIRY,
+  TEST UNIT READY / REQUEST SENSE, READ TOC, READ CD, READ 10, START STOP UNIT). Audio tracks play as seekable WAV
+  streams (cdda://track/N, CdDataSource); MusicBrainz names by disc id (the same as deck-90's cdnames.js) and the Cover
+  Art Archive's cover; data discs as ISO 9660/Joliet (cdda://file/N). The drive is polled every 3 s while CD is
+  chosen; a disc put in plays. Android Auto: a CD folder.
+- MODE: RADIO → USB → CD; the face's slot goes to the CD. The display names the source under PLAY (Deck 90 7.10.22's
+  display, patch "source").
+- Power: PWR off (or SLEEP's end) shows GOOD BYE, then dims the front (a veil over the photo); HELLO on power on;
+  off, only PWR, SEL, BAND and the memories act (Now.power, shared with the service).
+
 ## 0.1.6
 
 - The display's LOCAL lights only in the LOCAL band (setRadio({ local }), from Deck 90 7.10.21's display, patch

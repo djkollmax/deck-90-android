@@ -1,5 +1,22 @@
 # Novedades
 
+## 0.1.7 — 2026-11-14
+
+### Nuevo
+- **USB: la música de un pendrive.** Enchufalo al celular o a la tablet (con un adaptador OTG) y apretá **MODE**
+  un segundo para elegirlo; también sirve una carpeta del celular o de la tarjeta de memoria. Cada carpeta con música
+  es un disco: ◀◀ ▶▶ pasan de tema, 1 a 6 (y 7 a 12 manteniendo) van a un tema, BAND pasa de carpeta (mantenido, a la
+  anterior), SCAN es RAND y LOC es REP. En el display se ven el tema, el artista y el disco (los de cada archivo) y la
+  calidad, como FLAC 24/96. Parado, las teclas de arriba pasan de carpeta y **CARPETAS** las muestra todas.
+- **CD: una lectora de CD o DVD por USB.** Enchufala con un adaptador OTG y elegí CD con MODE (o tocá la ranura del
+  CD). La primera vez Android pregunta si Deck 90 puede usar la lectora. Los CD de música suenan tal cual están en el
+  disco, con los nombres de los temas y la tapa (de MusicBrainz, como el DC-90 de la PC); los discos con MP3 o FLAC
+  también. EJECT abre la lectora. Muchas lectoras piden más corriente de la que da un celular: si no arranca, usá un
+  cable en Y o un hub USB con fuente.
+- **MODE pasa de RADIO a USB, a CD y de vuelta a la radio.** En Android Auto aparecen las carpetas **USB** y **CD**.
+- **Apagado de verdad:** PWR dice **GOOD BYE** y el frente queda en penumbra; al final del SLEEP, lo mismo. Al prender
+  dice **HELLO**. Apagado, solo prenden PWR, SEL, BAND y las memorias.
+
 ## 0.1.6 — 2026-11-14
 
 ### Cambios
