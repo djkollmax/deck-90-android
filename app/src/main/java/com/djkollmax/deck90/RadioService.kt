@@ -237,4 +237,15 @@ object Now {
     @Volatile var quality = ""
     @Volatile var version = 0; private set
     fun changed() { version++ }
+
+    // the stereo on or off (PWR, or SLEEP at its end), and the word the display says when it goes off or comes on:
+    // GOOD BYE (PWR or SLEEP), HELLO, for a moment
+    @Volatile var power = true; private set
+    @Volatile var greet = ""; private set
+    @Volatile var greetUntil = 0L; private set
+    fun off(word: String) { power = false; say(word, 1800) }
+    fun on() { if (!power) { power = true; say("HELLO", 1200) } }
+    fun awake() { power = true }                                     // playing from elsewhere (the car, the notification): on, no word
+    private fun say(word: String, ms: Long) { greet = word; greetUntil = System.currentTimeMillis() + ms; changed() }
+    fun greeting(now: Long = System.currentTimeMillis()): String { if (greetUntil in 1 until now) { greet = ""; greetUntil = 0 }; return greet }
 }

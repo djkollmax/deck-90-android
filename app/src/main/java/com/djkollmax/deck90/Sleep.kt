@@ -7,7 +7,7 @@ import androidx.media3.common.Player
 // ═══════════════════════════════════════
 //  SLEEP: the radio switches itself off after 15, 30, 60 or 90 minutes (PWR held steps through them, then off). It
 //  lives with the player in the service, so it keeps counting with the screen off or the app closed; the last 10 s
-//  the sound fades out, then the player pauses and its volume comes back for the next time.
+//  the sound fades out, then the player pauses (the stereo off: GOOD BYE) and its volume comes back for the next time.
 // ═══════════════════════════════════════
 object Sleep {
     val STEPS = listOf(15, 30, 60, 90)
@@ -47,7 +47,7 @@ object Sleep {
             val rest = at - System.currentTimeMillis()
             val p = player
             when {
-                rest <= 0 -> { p?.pause(); p?.volume = 1f; at = 0L; chosen = 0; Now.changed(); return }
+                rest <= 0 -> { p?.pause(); p?.volume = 1f; at = 0L; chosen = 0; Now.off("GOOD BYE"); return }
                 rest <= FADE_MS -> p?.volume = (rest.toFloat() / FADE_MS).coerceIn(0f, 1f)
             }
             main.postDelayed(this, if (rest <= FADE_MS + 1000) 100 else 1000)

@@ -50,7 +50,6 @@ class MainActivity : AppCompatActivity() {
     @Volatile private var state = "{}"
     private var memo = 0L                                            // A.MEM armed until this time
     private var scanning = false
-    private var power = true
     private var flash = ""; private var flashUntil = 0L              // "VOL 40" or "ATT" on the display, 2 s
     @Volatile private var wx: JSONObject? = null                     // the weather for DISP TEMPERATURA
 
@@ -112,7 +111,7 @@ class MainActivity : AppCompatActivity() {
     // what the face shows, made on the main thread (the page reads it from its own)
     private var seen = -1
     private val ticker = object : Runnable {
-        override fun run() { if (Now.version != seen || flashUntil > 0 || Sleep.at != 0L) refresh(); main.postDelayed(this, 250) }
+        override fun run() { if (Now.version != seen || flashUntil > 0 || Now.greetUntil > 0 || Sleep.at != 0L) refresh(); main.postDelayed(this, 250) }
     }
 
     private fun refresh() {
@@ -122,7 +121,7 @@ class MainActivity : AppCompatActivity() {
         val band = store.band; val slot = if (tuned) 0 else store.slot
         val st = store.current()
         val playing = c?.isPlaying == true
-        if (playing) power = true
+        if (playing) Now.awake()
         val buffering = c?.playbackState == Player.STATE_BUFFERING && c.playWhenReady
         val now = System.currentTimeMillis()
         if (flashUntil in 1 until now) { flash = ""; flashUntil = 0 }
@@ -131,7 +130,7 @@ class MainActivity : AppCompatActivity() {
             .put("station", st?.name ?: "").put("song", Now.song).put("cc", st?.cc ?: "")
             .put("playing", playing).put("buffering", buffering).put("error", if (playing) "" else Now.error)
             .put("mono", band == "AM" && !tuned).put("quality", quality(c))
-            .put("memo", now < memo).put("scan", scanning).put("power", power).put("flash", flash).put("sleep", Sleep.left(now))
+            .put("memo", now < memo).put("scan", scanning).put("power", Now.power).put("greet", Now.greeting(now)).put("flash", flash).put("sleep", Sleep.left(now))
             .put("memories", JSONArray(store.memories(band).map { it?.name ?: "" }))
             .put("keepBand", Bands.label(keepBand()))
             .put("town", if (band == Bands.LOCAL) store.localAt()?.optString("town") ?: "" else "")
@@ -153,7 +152,7 @@ class MainActivity : AppCompatActivity() {
     private fun tune(band: String, slot: Int) {
         val c = controller ?: return
         if (store.station(band, slot) == null) { toast("MEMORIA $slot VACÍA"); return }
-        store.band = band; store.slot = slot; store.onTuned = false; Now.song = ""; Now.error = ""; power = true
+        store.band = band; store.slot = slot; store.onTuned = false; Now.song = ""; Now.error = ""; Now.on()
         c.setMediaItem(MediaItem.Builder().setMediaId(Store.mediaId(band, slot)).build())
         c.prepare(); c.play(); refresh()
     }
@@ -182,6 +181,8 @@ class MainActivity : AppCompatActivity() {
         val c = controller
         if (k != "scan" && scanning) { scanning = false; main.removeCallbacks(scan) }
         val audio = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        // off, as a stereo switched off: only PWR, SEL, BAND and the memories (on the face or the big keys) switch it on
+        if (!Now.power && !(k == "pwr" && !hold || k == "sel" || k == "band" && !hold || Regex("^(m[1-6]|mem\\d{1,2}|band:.+)$").matches(k))) return
         when {
             k == "pwr" && hold -> {
                 val m = Sleep.step()
@@ -191,17 +192,15 @@ class MainActivity : AppCompatActivity() {
                     " (PWR apretado otra vez: más tiempo o sin apagado)"
                     else "SLEEP · sin apagado automático")
             }
-            k == "pwr" -> {
-                power = !power
-                if (!power) Sleep.cancel()
-                if (power) { if (c != null && c.mediaItemCount > 0) { c.prepare(); c.play() } else tune(store.band, store.slot) }
-                else c?.pause()
+            k == "pwr" && Now.power -> { Sleep.cancel(); c?.pause(); Now.off("GOOD BYE") }
+            k == "pwr" || !Now.power && (k == "band" || k == "sel") -> {   // on (BAND and SEL too): where it was, with HELLO
+                Now.on(); if (c != null && c.mediaItemCount > 0) { c.prepare(); c.play() } else tune(store.band, store.slot)
             }
             k == "sel" -> when {
                 c == null -> {}
                 c.isPlaying -> { c.pause(); toast("RADIO · pausa") }
-                c.mediaItemCount > 0 -> { power = true; c.prepare(); c.play() }
-                store.onTuned -> store.tunedItem()?.let { power = true; c.setMediaItem(it); c.prepare(); c.play() }
+                c.mediaItemCount > 0 -> { Now.on(); c.prepare(); c.play() }
+                store.onTuned -> store.tunedItem()?.let { Now.on(); c.setMediaItem(it); c.prepare(); c.play() }
                 else -> tune(store.band, store.slot)
             }
             k == "band" && hold -> {
@@ -385,7 +384,7 @@ class MainActivity : AppCompatActivity() {
         val name = o.optString("name").trim().take(80); val url = o.optString("url")
         if (name.isEmpty() || !Regex("^https?://", RegexOption.IGNORE_CASE).containsMatchIn(url)) return
         store.tuned = Station(name, "", name.take(60), o.optString("cc").take(2), url)
-        store.onTuned = true; Now.song = ""; Now.error = ""; power = true
+        store.onTuned = true; Now.song = ""; Now.error = ""; Now.on()
         scanning = false; main.removeCallbacks(scan)
         store.tunedItem()?.let { c.setMediaItem(it); c.prepare(); c.play() }
         refresh()

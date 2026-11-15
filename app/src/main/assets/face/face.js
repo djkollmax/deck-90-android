@@ -229,12 +229,14 @@ function read() {
   let s;
   try { s = JSON.parse(app.state()); } catch (_) { return; }
   view = s;
-  const live = !!s.playing, extra = dispText(s), off = s.power === false;
+  // PWR (or SLEEP's end): GOOD BYE a moment, then the front goes dark; HELLO when it comes on
+  const greet = s.greet || '', live = !!s.playing && !greet, extra = dispText(s), off = s.power === false && !greet;
   const trouble = s.error ? 'NO SIGNAL' : s.buffering ? 'TUNING…' : '';
   const line = trouble || (!live ? '' : s.song && Math.floor(Date.now() / 4000) % 3 !== 2 ? s.song : s.station || '');
   // SLEEP: the minutes left take turns with the quality, in its corner of the display
   const corner = s.sleep > 0 && Math.floor(Date.now() / 4000) % 2 ? 'SLEEP ' + s.sleep : live ? s.quality || '' : '';
-  const radio = extra
+  const radio = greet ? { band: '', frequency: greet, preset: s.slot || 1, live: false, name: '', mono: false, local: false, quality: '' }
+    : extra
     ? { band: '', frequency: extra, preset: s.slot || 1, live, name: context(s), mono: !!s.mono, local: s.band === 'LOCAL' && !s.tuned, quality: corner }
     : { band: s.memo ? 'A.MEM' : s.tuned ? '' : s.band, frequency: s.freq || shortName(s.station).toUpperCase(), preset: s.slot || 1, live, name: line, mono: !!s.mono, local: s.band === 'LOCAL' && !s.tuned, quality: corner };
   const key = JSON.stringify([radio, off, s.memories, s.scan, s.slot, s.band]);

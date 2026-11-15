@@ -162,8 +162,12 @@ body:is([data-view=vu], [data-view=spec]) :is(.pad-bands, .pad-mems) { display: 
   .pad-mems button small { font-size: 15px; }
   .pad-row button { font-size: 20px; }
 }
-/* PWR off: the display and the AUX light out, as a stereo switched off */
+/* PWR off: the display and the AUX light out, and the front in the half dark of a stereo switched off (its keys
+   unlit); a veil over the photo, so the looks' own filters stay */
 .st-face.off .st-display { filter: brightness(.06); }      /* dark glass: hiding it would show the photo's own LCD */
+.st-face::after { content: ''; position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none;
+  transition: opacity .7s ease; border-radius: inherit; }
+.st-face.off::after { opacity: .5; }
 /* the radio search (SCAN held) */
 #rfFind { position: fixed; inset: 0; z-index: 8; display: none; align-items: center; justify-content: center;
   background: rgba(0, 0, 0, .72); padding: max(8px, env(safe-area-inset-top)) 8px max(8px, env(safe-area-inset-bottom)); }
