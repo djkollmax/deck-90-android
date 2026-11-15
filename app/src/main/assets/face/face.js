@@ -131,7 +131,7 @@ function key(k, hold) {
     toast('DISP · ' + STEREO_DISP_NAME[look.disp] + (look.disp === 'time' ? ' (la radio es en vivo)' : ''), 1500);
     read.last = ''; read(); return;
   }
-  if (k === 'scan' && hold && view.mode !== 'usb') { finderOpen(true); return; }   // as on the PC: held, any station in the world
+  if (k === 'scan' && hold && (view.mode || 'radio') === 'radio') { finderOpen(true); return; }   // as on the PC: held, any station in the world
   app.key(k, !!hold);
   setTimeout(read, 60);
 }
@@ -168,7 +168,7 @@ const BANDS = ['FM1', 'FM2', 'FM3', 'FM4', 'FM5', 'HI-FI', 'AM', 'LOCAL'];   // 
   const pad = el('pad');
   pad.addEventListener('pointerdown', e => {
     const m = e.target.closest('[data-m]'), k = e.target.closest('[data-k]'); held = false;
-    if (m && view.mode !== 'usb') holdT = setTimeout(() => { held = true; app.key('keep' + m.dataset.m, true); setTimeout(read, 80); }, 1000);
+    if (m && (view.mode || 'radio') === 'radio') holdT = setTimeout(() => { held = true; app.key('keep' + m.dataset.m, true); setTimeout(read, 80); }, 1000);
     else if (k && k.dataset.k === 'scan') holdT = setTimeout(() => { held = true; key('scan', true); }, 1000);   // as on the face: the world search
   });
   ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => pad.addEventListener(ev, () => clearTimeout(holdT)));
@@ -184,18 +184,19 @@ const BANDS = ['FM1', 'FM2', 'FM3', 'FM4', 'FM5', 'HI-FI', 'AM', 'LOCAL'];   // 
   });
   pad.addEventListener('contextmenu', e => e.preventDefault());
 })();
-const USB_PAD = [['discprev', '◀ CARPETA'], ['discs', 'CARPETAS'], ['discnext', 'CARPETA ▶'], ['mode', 'RADIO']];
+const USB_PAD = [['discprev', '◀ CARPETA'], ['discs', 'CARPETAS'], ['discnext', 'CARPETA ▶'], ['mode:radio', 'RADIO']];
+const CD_PAD = [['eject', '⏏ EXPULSAR'], ['scan', 'RAND'], ['loc', 'REP'], ['mode:radio', 'RADIO']];
 function padSync(s) {
-  const usb = s.mode === 'usb', bands = el('padBands');
+  const usb = s.mode === 'usb' || s.mode === 'cd', bands = el('padBands');
   if (bands.dataset.mode !== s.mode) {                               // USB: the folders in place of the bands
     bands.dataset.mode = s.mode; bands.classList.toggle('usb', usb);
-    bands.replaceChildren(...(usb ? USB_PAD.map(([k, t]) => { const x = document.createElement('button'); x.dataset.k = k; x.textContent = t; return x; })
+    bands.replaceChildren(...(usb ? (s.mode === 'cd' ? CD_PAD : USB_PAD).map(([k, t]) => { const x = document.createElement('button'); x.dataset.k = k; x.textContent = t; return x; })
       : BANDS.map(b => { const x = document.createElement('button'); x.textContent = b; x.dataset.band = b; return x; })));
-    const v = document.querySelector('#padViews [data-v=radio]'); if (v) v.textContent = usb ? 'USB' : 'RADIO';
+    const v = document.querySelector('#padViews [data-v=radio]'); if (v) v.textContent = usb ? s.mode.toUpperCase() : 'RADIO';
     const sc = document.querySelector('.pad-row [data-k=scan]'); if (sc) sc.textContent = usb ? 'RAND' : 'SCAN';
   }
   if (usb) {
-    const names = s.memories || [], n = s.usb ? s.usb.n : 0;
+    const names = s.memories || [], n = (s.usb || s.cd || {}).n || 0;
     el('padMems').querySelectorAll('button').forEach((b, i) => {
       const x = names[i] || ''; b.querySelector('small').textContent = x || '—'; b.classList.toggle('empty', !x); b.classList.toggle('on', i + 1 === n);
     });
@@ -257,6 +258,29 @@ function usbTrack(s, u, extra) {
   }
   return { title, artist, number: u.discs && !s.error ? u.n : 0, length: u.len || 0, quality: s.quality || '', disc: !!u.discs, source: 'USB', playing: true };
 }
+// the CD (a USB drive): as the PC's stereo shows the DC-90's disc
+const CD_SAY = { none: ['NO CD DRIVE', 'CONNECT A CD DRIVE BY USB (OTG)'], perm: ['ALLOW THE DRIVE', 'ACCEPT ANDROID\'S QUESTION'], nodisc: ['NO DISC', 'INSERT A DISC'],
+  reading: ['READING', 'THE DISC'], empty: ['NO AUDIO', 'THIS DISC HAS NO MUSIC'], error: ['CD ERROR', 'UNPLUG THE DRIVE AND PLUG IT IN AGAIN'] };
+function cdTrack(s, u, extra) {
+  const say = CD_SAY[u.status];
+  let title, artist;
+  if (say) [title, artist] = say;
+  else if (s.error) { title = 'NO DISC'; artist = 'INSERT A DISC AND PRESS SEL'; }
+  else {
+    title = extra || u.title || 'TRACK ' + String(u.n).padStart(2, '0');
+    artist = (u.files ? [u.artist || 'MP3', 'DISC ' + u.n + '/' + u.total] : [u.artist, u.album].filter(Boolean)).join(' · ') || 'CD · ' + u.total + ' TRACKS';
+    artist += (s.playing ? '' : ' · PAUSE') + (u.rand ? ' · RAND' : '') + (u.rep === 1 ? ' · REP' : u.rep === 2 ? ' · REP 1' : '');
+  }
+  return { title, artist, number: say || s.error ? 0 : u.n, length: u.len || 0, quality: s.quality || '', disc: !say, source: 'CD', playing: true };
+}
+function cdNow(s, u) {
+  const say = CD_SAY[u.status];
+  el('nowBand').textContent = 'CD' + (say ? '' : ' · ' + (u.files ? 'ARCHIVO ' : 'PISTA ') + u.n + '/' + u.total) + (u.rand ? ' · RAND' : '') + (u.rep ? ' · REP' : '') + (s.sleep > 0 ? ' · SLEEP ' + s.sleep + "'" : '');
+  el('nowName').textContent = say ? ({ none: 'Sin lectora', perm: 'Permiso para la lectora', nodisc: 'Sin disco', reading: 'Leyendo el disco…', empty: 'El disco no tiene música', error: 'No pude leer la lectora' })[u.status] : u.title || 'CD';
+  el('nowSong').textContent = say ? ({ none: 'Conectá una lectora de CD por USB (OTG)', perm: 'Aceptá la pregunta de Android', nodisc: 'Poné un disco', reading: '', empty: 'Probá con otro disco', error: 'Desenchufala y volvé a enchufarla' })[u.status]
+    : [u.artist, u.album, u.year].filter(Boolean).join(' · ');
+  const q = el('nowQ'); q.textContent = s.quality ? (/PCM|FLAC/.test(s.quality) ? 'HI-FI · ' : '') + s.quality : ''; q.classList.toggle('hifi', /PCM|FLAC/.test(s.quality || ''));
+}
 function usbNow(s, u) {
   el('nowBand').textContent = 'USB' + (u.discs ? ' · ' + u.disc + '/' + u.discs + ' · TEMA ' + u.n + '/' + u.total : '') + (u.rand ? ' · RAND' : '') + (u.rep ? ' · REP' : '') + (s.sleep > 0 ? ' · SLEEP ' + s.sleep + "'" : '');
   el('nowName').textContent = u.title || (u.picked ? u.root || 'USB' : 'USB');
@@ -273,12 +297,12 @@ function read() {
   const line = trouble || (!live ? '' : s.song && Math.floor(Date.now() / 4000) % 3 !== 2 ? s.song : s.station || '');
   // SLEEP: the minutes left take turns with the quality, in its corner of the display
   const corner = s.sleep > 0 && Math.floor(Date.now() / 4000) % 2 ? 'SLEEP ' + s.sleep : live ? s.quality || '' : '';
-  const u = s.mode === 'usb' && s.usb, usbOn = !!u && !greet;
+  const u = s.mode === 'usb' && s.usb || s.mode === 'cd' && s.cd, usbOn = !!u && !greet;
   const radio = greet ? { band: '', frequency: greet, preset: s.slot || 1, live: false, name: '', mono: false, local: false, quality: '' }
     : extra
     ? { band: '', frequency: extra, preset: s.slot || 1, live, name: context(s), mono: !!s.mono, local: s.band === 'LOCAL' && !s.tuned, quality: corner }
     : { band: s.memo ? 'A.MEM' : s.tuned ? '' : s.band, frequency: s.freq || shortName(s.station).toUpperCase(), preset: s.slot || 1, live, name: line, mono: !!s.mono, local: s.band === 'LOCAL' && !s.tuned, quality: corner };
-  const track = usbOn ? usbTrack(s, u, extra) : null;
+  const track = usbOn ? (s.mode === 'cd' ? cdTrack(s, u, extra) : usbTrack(s, u, extra)) : null;
   const key = JSON.stringify([track || radio, off, s.memories, s.scan, s.slot, s.band, s.mode]);
   face.classList.toggle('off', off);
   el('stereoView').classList.toggle('aux-on', live);
@@ -287,7 +311,7 @@ function read() {
   read.last = key;
   if (disp) { if (track) disp.setTrack(track); else dispRadio(radio); }
   padSync(s);
-  if (u) { usbNow(s, u); if (finderShown()) finderKeepSync(); return; }
+  if (u) { if (s.mode === 'cd') cdNow(s, u); else usbNow(s, u); return; }
   el('nowBand').textContent = (s.memo ? 'A.MEM · ' : '') + (s.tuned ? 'MUNDO' + (s.cc ? ' · ' + s.cc : '') : s.band + (s.town ? ' · ' + s.town.toUpperCase() : '') + ' · ' + s.slot + (s.freq ? ' · ' + s.freq : '')) + (s.scan ? ' · SCAN' : '') + (s.sleep > 0 ? ' · SLEEP ' + s.sleep + "'" : '');
   el('nowName').textContent = s.station || 'DECK 90';
   el('nowSong').textContent = trouble || s.song || '';

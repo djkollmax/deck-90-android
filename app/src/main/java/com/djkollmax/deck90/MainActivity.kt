@@ -106,10 +106,13 @@ class MainActivity : AppCompatActivity() {
         }, MoreExecutors.directExecutor())
         main.post(ticker)
         main.post(weather)
+        androidx.core.content.ContextCompat.registerReceiver(this, usbAnswer, android.content.IntentFilter(usbAsk), androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED)
+        if (store.mode == "cd") main.post(cdPoll)
     }
 
     override fun onStop() {
-        main.removeCallbacks(ticker); main.removeCallbacks(weather)
+        main.removeCallbacks(ticker); main.removeCallbacks(weather); main.removeCallbacks(cdPoll)
+        runCatching { unregisterReceiver(usbAnswer) }
         controller?.release(); controller = null
         super.onStop()
     }
@@ -133,13 +136,13 @@ class MainActivity : AppCompatActivity() {
         if (flashUntil in 1 until now) { flash = ""; flashUntil = 0 }
         val usb = store.mode == "usb"
         state = JSONObject()
-            .put("mode", store.mode).put("usb", if (usb) usbState(c) else JSONObject.NULL)
+            .put("mode", store.mode).put("usb", if (usb) usbState(c) else JSONObject.NULL).put("cd", if (store.mode == "cd") cdState(c) else JSONObject.NULL)
             .put("band", Bands.label(band)).put("slot", slot).put("freq", st?.freq ?: "").put("tuned", tuned)
             .put("station", st?.name ?: "").put("song", Now.song).put("cc", st?.cc ?: "")
             .put("playing", playing).put("buffering", buffering).put("error", if (playing) "" else Now.error)
-            .put("mono", band == "AM" && !tuned).put("quality", quality(c))
+            .put("mono", band == "AM" && !tuned).put("quality", if (store.mode == "cd" && Cd.status == "audio" && Cd.parse(c?.currentMediaItem?.mediaId) != null) "PCM 16/44.1" else quality(c))
             .put("memo", now < memo).put("scan", scanning).put("power", Now.power).put("greet", Now.greeting(now)).put("flash", flash).put("sleep", Sleep.left(now))
-            .put("memories", JSONArray(if (usb) Usb.discs.getOrNull(store.usbDisc - 1)?.songs?.take(Bands.SLOTS)?.map { Usb.songName(it.name) } ?: emptyList<String>()
+            .put("memories", JSONArray(if (store.mode == "cd") Cd.numbers().take(Bands.SLOTS).map { Cd.title(it) } else if (usb) Usb.discs.getOrNull(store.usbDisc - 1)?.songs?.take(Bands.SLOTS)?.map { Usb.songName(it.name) } ?: emptyList<String>()
                 else store.memories(band).map { it?.name ?: "" }))
             .put("keepBand", Bands.label(keepBand()))
             .put("town", if (band == Bands.LOCAL) store.localAt()?.optString("town") ?: "" else "")
@@ -199,8 +202,13 @@ class MainActivity : AppCompatActivity() {
         val audio = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         // off, as a stereo switched off: only PWR, SEL, BAND and the memories (on the face or the big keys) switch it on
         if (!Now.power && !(k == "pwr" && !hold || k == "sel" || k == "band" && !hold || Regex("^(m[1-6]|mem\\d{1,2}|band:.+)$").matches(k))) return
-        if (k == "mode") { if (hold) usbChoose() else if (store.mode == "usb") toRadio() else toUsb(); web.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP); refresh(); return }
-        if (store.mode == "usb" && Now.power && usbKey(k, hold, c)) { web.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP); refresh(); return }
+        // MODE: RADIO → USB → CD → RADIO (held: pick the pendrive); the CD's slot on the face: the CD
+        val tap = { web.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP); refresh() }
+        if (k == "mode") { when { hold -> usbChoose(); store.mode == "usb" -> toCd(); store.mode == "cd" -> toRadio(); else -> toUsb() }; tap(); return }
+        if (k == "mode:radio") { toRadio(); tap(); return }
+        if (k == "slot" && store.mode != "cd") { toCd(); tap(); return }
+        if (store.mode == "usb" && Now.power && usbKey(k, hold, c)) { tap(); return }
+        if (store.mode == "cd" && Now.power && cdKey(k, hold, c)) { tap(); return }
         when {
             k == "pwr" && hold -> {
                 val m = Sleep.step()
@@ -213,7 +221,7 @@ class MainActivity : AppCompatActivity() {
             k == "pwr" && Now.power -> { Sleep.cancel(); c?.pause(); Now.off("GOOD BYE") }
             k == "pwr" || !Now.power && (k == "band" || k == "sel") -> {   // on (BAND and SEL too): where it was, with HELLO
                 Now.on()
-                when { c != null && c.mediaItemCount > 0 -> { c.prepare(); c.play() }; store.mode == "usb" -> playUsb(store.usbDisc, store.usbTrack, store.usbPos); else -> tune(store.band, store.slot) }
+                when { c != null && c.mediaItemCount > 0 -> { c.prepare(); c.play() }; store.mode == "usb" -> playUsb(store.usbDisc, store.usbTrack, store.usbPos); store.mode == "cd" -> toCd(); else -> tune(store.band, store.slot) }
             }
             k == "sel" -> when {
                 c == null -> {}
@@ -251,7 +259,7 @@ class MainActivity : AppCompatActivity() {
                 audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_TOGGLE_MUTE, 0); volume(audio)
                 if (flash == "ATT") toast("ATT · silencio (otra vez para volver)")
             }
-            k == "eject" || k == "slot" -> toast("RADIO · para la música de un pendrive o una carpeta, MODE (USB)")
+            k == "eject" -> toast("RADIO · MODE pasa a USB (un pendrive) y al CD (una lectora por USB)")
             k == "weather" -> wantWeather()
             k == "loc" -> loc(hold)
         }
@@ -321,7 +329,7 @@ class MainActivity : AppCompatActivity() {
     }
     private fun toUsb() {
         when {
-            Usb.root.isEmpty() -> usbChoose()
+            Usb.root.isEmpty() -> { controller?.pause(); store.mode = "usb"; toast("MODE · USB · para elegir el pendrive (o una carpeta), MODE apretado. MODE otra vez: CD") }
             Usb.scanning -> toast("USB · leyendo la carpeta…")
             Usb.discs.isEmpty() -> usbRead(play = true)
             else -> { playUsb(store.usbDisc, store.usbTrack, store.usbPos); toast("MODE · USB · " + Usb.rootName.ifEmpty { "MÚSICA" } + " · ${Usb.discs.size} " + if (Usb.discs.size == 1) "carpeta" else "carpetas") }
@@ -362,7 +370,8 @@ class MainActivity : AppCompatActivity() {
         val songs = Usb.discs.getOrNull(disc - 1)?.songs?.size ?: 0
         val track = { n: Int -> if (n in 1..songs) { if (here != null && c != null) { c.seekTo(n - 1, 0); c.play() } else playUsb(disc, n, 0); toast("TRACK · " + n.toString().padStart(2, '0')) } else toast("La carpeta tiene $songs temas") }
         when {
-            Usb.discs.isEmpty() && k != "eject" && k != "slot" && k != "pwr" -> { toUsb(); return true }
+            Usb.discs.isEmpty() && k != "eject" && k != "slot" && k != "pwr" && k.let { it == "sel" || it == "next" || it == "prev" || it.startsWith("m") || it == "band" } -> {
+                if (Usb.root.isEmpty()) usbChoose() else usbRead(play = true); return true }
             k == "sel" -> when { c == null -> {}; c.isPlaying -> c.pause(); here != null -> c.play(); else -> playUsb(store.usbDisc, store.usbTrack, store.usbPos) }
             k == "next" -> if (here != null && c != null) { if (c.hasNextMediaItem()) c.seekToNextMediaItem() else c.seekTo(0, 0); c.play() } else playUsb(disc, 1, 0)
             k == "prev" -> if (here != null && c != null) { c.seekToPrevious(); c.play() } else playUsb(disc, 1, 0)
@@ -399,6 +408,98 @@ class MainActivity : AppCompatActivity() {
             .put("len", len / 1000.0).put("pos", (if (here != null) c?.currentPosition ?: 0L else store.usbPos) / 1000.0)
             .put("rand", store.usbRand).put("rep", store.usbRep)
     }
+    // ═══ CD: a disc in a USB drive (Cd.kt). The person allows the drive once (Android asks); while the CD is chosen
+    // and no disc plays, the drive is asked every few seconds, and a disc put in plays from its first track, as in a
+    // car. On the CD: SEL, ◀◀ ▶▶, 1–6 (held 7–12) its tracks, SCAN RAND, LOC REP, EJECT opens the drive, BAND the radio
+    private val usbAsk = "com.djkollmax.deck90.CD_PERMISSION"
+    private var asked = false
+    private val usbAnswer = object : android.content.BroadcastReceiver() {
+        override fun onReceive(ctx: Context, i: android.content.Intent) { if (i.action == usbAsk) { asked = false; cdLook(play = true) } }
+    }
+    private var cdBusy = false
+    private fun cdLook(play: Boolean) {
+        if (cdBusy) return
+        cdBusy = true
+        val was = Cd.status
+        Thread {
+            val now = Cd.refresh(this)
+            main.post {
+                cdBusy = false
+                if (now == "perm" && !asked) {
+                    asked = true
+                    val um = getSystemService(Context.USB_SERVICE) as android.hardware.usb.UsbManager
+                    CdDrive.find(um)?.let { dev ->
+                        toast("CD · Android pregunta si Deck 90 puede usar la lectora: tocá ACEPTAR")
+                        um.requestPermission(dev, android.app.PendingIntent.getBroadcast(this, 3, android.content.Intent(usbAsk).setPackage(packageName),
+                            android.app.PendingIntent.FLAG_MUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT))
+                    }
+                }
+                val ready = now == "audio" || now == "files"
+                if (ready && (play || was != now) && store.mode == "cd" && Cd.parse(controller?.currentMediaItem?.mediaId) == null) playCd(Cd.numbers().first())
+                refresh()
+            }
+        }.start()
+    }
+    private val cdPoll = object : Runnable {
+        override fun run() {
+            main.removeCallbacks(this)
+            if (store.mode != "cd") return
+            if (Cd.status != "audio" && Cd.status != "files" || Cd.parse(controller?.currentMediaItem?.mediaId) == null && controller?.isPlaying != true) cdLook(play = false)
+            main.postDelayed(this, 3000)
+        }
+    }
+    private fun toCd() {
+        controller?.let { c -> if (Usb.parse(c.currentMediaItem?.mediaId) != null) store.usbPos = c.currentPosition; c.pause() }
+        store.mode = "cd"; Now.error = ""
+        toast("MODE · CD" + if (Cd.count() > 0) "" else " · conectá la lectora por USB (OTG) y poné un disco")
+        if (Cd.count() > 0) playCd(store.cdTrack.takeIf { it in Cd.numbers() } ?: Cd.numbers().first()) else cdLook(play = true)
+        main.post(cdPoll)
+    }
+    private fun playCd(n: Int) {
+        val c = controller ?: return
+        val (items, at) = Cd.playlist(n)
+        store.mode = "cd"
+        if (items.isEmpty()) { refresh(); return }
+        scanning = false; main.removeCallbacks(scan); Now.on(); Now.error = ""; Now.song = ""
+        c.shuffleModeEnabled = store.usbRand; c.repeatMode = arrayOf(Player.REPEAT_MODE_OFF, Player.REPEAT_MODE_ALL, Player.REPEAT_MODE_ONE)[store.usbRep]
+        c.setMediaItems(items, at, 0); c.prepare(); c.play(); refresh()
+    }
+    private fun cdKey(k: String, hold: Boolean, c: MediaController?): Boolean {
+        val here = Cd.parse(c?.currentMediaItem?.mediaId)
+        val all = Cd.numbers()
+        val track = { n: Int -> if (n in all) { if (here != null && c != null) { c.seekTo(all.indexOf(n), 0); c.play() } else playCd(n); toast("TRACK · " + n.toString().padStart(2, '0')) }
+            else toast(if (all.isEmpty()) "CD · no hay un disco" else "El disco tiene ${all.size} " + if (Cd.status == "files") "archivos" else "pistas") }
+        when {
+            k == "eject" -> { c?.pause(); if (Cd.eject()) toast("EJECT · la lectora se abre") else toast("CD · no hay lectora"); main.post(cdPoll) }
+            all.isEmpty() && k in setOf("sel", "next", "prev", "slot") -> { cdLook(play = true); toast(when (Cd.status) { "none" -> "CD · conectá la lectora por USB (OTG)"; "nodisc" -> "CD · poné un disco"; "perm" -> "CD · aceptá el permiso de Android para la lectora"; "empty" -> "CD · el disco no tiene música"; "error" -> "CD · no pude leer la lectora: desenchufala y volvé a enchufarla"; else -> "CD · leyendo…" }) }
+            k == "sel" || k == "slot" -> when { c == null -> {}; c.isPlaying -> c.pause(); here != null -> c.play(); else -> playCd(store.cdTrack.takeIf { it in all } ?: all.first()) }
+            k == "next" -> if (here != null && c != null) { if (c.hasNextMediaItem()) c.seekToNextMediaItem() else c.seekTo(0, 0); c.play() } else playCd(all.first())
+            k == "prev" -> if (here != null && c != null) { c.seekToPrevious(); c.play() } else playCd(all.first())
+            Regex("^m[1-6]$").matches(k) -> track(k[1].digitToInt() + if (hold) 6 else 0)
+            Regex("^mem(\\d{1,3})$").matches(k) -> track(k.removePrefix("mem").toInt())
+            k == "scan" -> { store.usbRand = !store.usbRand; c?.shuffleModeEnabled = store.usbRand; toast(if (store.usbRand) "RAND · las pistas al azar" else "RAND · en orden") }
+            k == "loc" -> {
+                store.usbRep = (store.usbRep + 1) % 3
+                c?.repeatMode = arrayOf(Player.REPEAT_MODE_OFF, Player.REPEAT_MODE_ALL, Player.REPEAT_MODE_ONE)[store.usbRep]
+                toast(arrayOf("REP · sin repetir", "REP · repite el disco", "REP · repite la pista")[store.usbRep])
+            }
+            k == "band" -> toRadio()
+            k.startsWith("keep") -> toast("CD · los números guardan radios: MODE para volver a la radio")
+            else -> return false
+        }
+        return true
+    }
+    private fun cdState(c: MediaController?): JSONObject {
+        val here = Cd.parse(c?.currentMediaItem?.mediaId)
+        val n = here ?: store.cdTrack
+        val len = c?.duration?.takeIf { here != null && it > 0 } ?: 0L
+        return JSONObject().put("status", Cd.status).put("files", Cd.status == "files").put("n", if (Cd.count() > 0) n else 0).put("total", Cd.count())
+            .put("title", if (Cd.count() > 0) Cd.title(n) else "").put("artist", if (Cd.count() > 0) Cd.artist(n) else "")
+            .put("album", Cd.names?.album ?: "").put("year", Cd.names?.year ?: "")
+            .put("len", len / 1000.0).put("pos", (if (here != null) c?.currentPosition ?: 0L else 0L) / 1000.0)
+            .put("rand", store.usbRand).put("rep", store.usbRep)
+    }
+
     // the face's list of discs (the pad's CARPETAS)
     private fun discsJson(): String = JSONArray(Usb.discs.mapIndexed { i, d -> JSONObject().put("d", i + 1).put("name", d.name).put("songs", d.songs.size) }).toString()
 

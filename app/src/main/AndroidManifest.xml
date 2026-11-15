@@ -8,6 +8,8 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- the temperature on DISP where the phone is (the city is enough), asked for when DISP first shows it -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- the CD: a drive on USB (OTG), spoken to directly (Cd.kt); phones without USB host still install it -->
+    <uses-feature android:name="android.hardware.usb.host" android:required="false" />
 
     <!-- many stations still stream over plain http -->
     <application
