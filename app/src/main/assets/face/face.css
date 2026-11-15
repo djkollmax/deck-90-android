@@ -94,6 +94,7 @@ html, body {
 .pad button:focus-visible, .meters canvas:focus-visible { outline: 2px solid var(--cyan); outline-offset: -3px; }
 .pad-bands, .pad-mems, .pad-views, .pad-row { display: grid; gap: clamp(4px, 1.1vw, 7px); }
 .pad-bands { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+.pad-bands.usb { grid-template-columns: 1fr 1.3fr 1fr .8fr; }   /* USB: ◀ CARPETA · CARPETAS · CARPETA ▶ · RADIO */
 .pad-mems { grid-template: repeat(3, minmax(44px, 1fr)) / repeat(4, minmax(0, 1fr)); flex: 1; min-height: 0; }
 .pad-views { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .pad-views [data-v=stereo] { display: none; }
@@ -223,3 +224,5 @@ body:is([data-view=vu], [data-view=spec]) :is(.pad-bands, .pad-mems) { display: 
   pointer-events: none;
 }
 #toast.show { opacity: 1; }
+/* USB's folders in the search's window: no search row, no numbers */
+#rfFind.list :is(.rf-row, .rf-keep, .rf-help) { display: none; }

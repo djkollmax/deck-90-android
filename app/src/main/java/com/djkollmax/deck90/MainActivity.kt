@@ -52,11 +52,17 @@ class MainActivity : AppCompatActivity() {
     private var scanning = false
     private var flash = ""; private var flashUntil = 0L              // "VOL 40" or "ATT" on the display, 2 s
     @Volatile private var wx: JSONObject? = null                     // the weather for DISP TEMPERATURA
+    // USB: Android's folder picker (a pendrive plugged in by OTG shows there too); the folder then read
+    private val usbPicker = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri == null) { toast("USB · no elegiste ninguna carpeta: MODE apretado para elegirla"); return@registerForActivityResult }
+        Usb.pick(this, uri); usbRead(play = true)
+    }
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         store = Store(this)
+        Usb.load(this)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         WindowInsetsControllerCompat(window, window.decorView).apply {
@@ -125,13 +131,16 @@ class MainActivity : AppCompatActivity() {
         val buffering = c?.playbackState == Player.STATE_BUFFERING && c.playWhenReady
         val now = System.currentTimeMillis()
         if (flashUntil in 1 until now) { flash = ""; flashUntil = 0 }
+        val usb = store.mode == "usb"
         state = JSONObject()
+            .put("mode", store.mode).put("usb", if (usb) usbState(c) else JSONObject.NULL)
             .put("band", Bands.label(band)).put("slot", slot).put("freq", st?.freq ?: "").put("tuned", tuned)
             .put("station", st?.name ?: "").put("song", Now.song).put("cc", st?.cc ?: "")
             .put("playing", playing).put("buffering", buffering).put("error", if (playing) "" else Now.error)
             .put("mono", band == "AM" && !tuned).put("quality", quality(c))
             .put("memo", now < memo).put("scan", scanning).put("power", Now.power).put("greet", Now.greeting(now)).put("flash", flash).put("sleep", Sleep.left(now))
-            .put("memories", JSONArray(store.memories(band).map { it?.name ?: "" }))
+            .put("memories", JSONArray(if (usb) Usb.discs.getOrNull(store.usbDisc - 1)?.songs?.take(Bands.SLOTS)?.map { Usb.songName(it.name) } ?: emptyList<String>()
+                else store.memories(band).map { it?.name ?: "" }))
             .put("keepBand", Bands.label(keepBand()))
             .put("town", if (band == Bands.LOCAL) store.localAt()?.optString("town") ?: "" else "")
             .put("wx", wx ?: JSONObject.NULL)
@@ -146,6 +155,12 @@ class MainActivity : AppCompatActivity() {
             MimeTypes.AUDIO_OPUS -> "OPUS"; MimeTypes.AUDIO_VORBIS -> "OGG"; else -> ""
         }
         val kbps = if (f.bitrate > 0) f.bitrate / 1000 else 0
+        if (codec == "FLAC" || f.sampleMimeType == MimeTypes.AUDIO_RAW || f.sampleMimeType == MimeTypes.AUDIO_ALAC) {   // lossless: bits and kHz
+            val bits = when (f.pcmEncoding) { androidx.media3.common.C.ENCODING_PCM_24BIT -> 24; androidx.media3.common.C.ENCODING_PCM_32BIT, androidx.media3.common.C.ENCODING_PCM_FLOAT -> 32; androidx.media3.common.C.ENCODING_PCM_16BIT -> 16; else -> 0 }
+            val khz = if (f.sampleRate > 0) (if (f.sampleRate % 1000 == 0) (f.sampleRate / 1000).toString() else "%.1f".format(java.util.Locale.ROOT, f.sampleRate / 1000.0)) else ""
+            val name = if (codec.isNotEmpty()) codec else if (f.sampleMimeType == MimeTypes.AUDIO_ALAC) "ALAC" else "WAV"
+            return listOf(name, if (bits > 0 && khz.isNotEmpty()) "$bits/$khz" else khz).filter { it.isNotEmpty() }.joinToString(" ")
+        }
         return listOf(codec, if (kbps > 0) kbps.toString() else "").filter { it.isNotEmpty() }.joinToString(" ")
     }
 
@@ -153,6 +168,7 @@ class MainActivity : AppCompatActivity() {
         val c = controller ?: return
         if (store.station(band, slot) == null) { toast("MEMORIA $slot VACÍA"); return }
         store.band = band; store.slot = slot; store.onTuned = false; Now.song = ""; Now.error = ""; Now.on()
+        radioMode(c)
         c.setMediaItem(MediaItem.Builder().setMediaId(Store.mediaId(band, slot)).build())
         c.prepare(); c.play(); refresh()
     }
@@ -183,6 +199,8 @@ class MainActivity : AppCompatActivity() {
         val audio = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         // off, as a stereo switched off: only PWR, SEL, BAND and the memories (on the face or the big keys) switch it on
         if (!Now.power && !(k == "pwr" && !hold || k == "sel" || k == "band" && !hold || Regex("^(m[1-6]|mem\\d{1,2}|band:.+)$").matches(k))) return
+        if (k == "mode") { if (hold) usbChoose() else if (store.mode == "usb") toRadio() else toUsb(); web.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP); refresh(); return }
+        if (store.mode == "usb" && Now.power && usbKey(k, hold, c)) { web.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP); refresh(); return }
         when {
             k == "pwr" && hold -> {
                 val m = Sleep.step()
@@ -194,7 +212,8 @@ class MainActivity : AppCompatActivity() {
             }
             k == "pwr" && Now.power -> { Sleep.cancel(); c?.pause(); Now.off("GOOD BYE") }
             k == "pwr" || !Now.power && (k == "band" || k == "sel") -> {   // on (BAND and SEL too): where it was, with HELLO
-                Now.on(); if (c != null && c.mediaItemCount > 0) { c.prepare(); c.play() } else tune(store.band, store.slot)
+                Now.on()
+                when { c != null && c.mediaItemCount > 0 -> { c.prepare(); c.play() }; store.mode == "usb" -> playUsb(store.usbDisc, store.usbTrack, store.usbPos); else -> tune(store.band, store.slot) }
             }
             k == "sel" -> when {
                 c == null -> {}
@@ -232,8 +251,7 @@ class MainActivity : AppCompatActivity() {
                 audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_TOGGLE_MUTE, 0); volume(audio)
                 if (flash == "ATT") toast("ATT · silencio (otra vez para volver)")
             }
-            k == "mode" -> toast("MODE · RADIO por internet · el servidor de música llega en la próxima versión")
-            k == "eject" || k == "slot" -> toast("Este estéreo no tiene CD: la radio es por internet")
+            k == "eject" || k == "slot" -> toast("RADIO · para la música de un pendrive o una carpeta, MODE (USB)")
             k == "weather" -> wantWeather()
             k == "loc" -> loc(hold)
         }
@@ -288,6 +306,101 @@ class MainActivity : AppCompatActivity() {
         val json = JSONArray(found.map { it.toJson() }).toString()
         web.evaluateJavascript("window.faceNear&&faceNear(${JSONObject.quote(town)},$json)", null)
     }
+
+    // ═══ USB: a pendrive or a folder (Usb.kt), its folders as discs. MODE goes from the radio to it and back; MODE held
+    // picks another folder. On USB: SEL play/pause, ◀◀ ▶▶ the songs, 1–6 a song (held 7–12), BAND the next disc (held:
+    // the one before), SCAN RAND, LOC REP (the disc, the song, off), EJECT reads the folder again
+    private fun radioMode(c: MediaController) {
+        store.mode = "radio"; c.shuffleModeEnabled = false; c.repeatMode = Player.REPEAT_MODE_OFF
+    }
+    private fun toRadio() {
+        controller?.let { c -> if (Usb.parse(c.currentMediaItem?.mediaId) != null) store.usbPos = c.currentPosition }
+        if (store.onTuned) store.tunedItem()?.let { item -> controller?.let { c -> radioMode(c); Now.on(); c.setMediaItem(item); c.prepare(); c.play() } }
+        else tune(store.band, store.slot)
+        toast("MODE · RADIO")
+    }
+    private fun toUsb() {
+        when {
+            Usb.root.isEmpty() -> usbChoose()
+            Usb.scanning -> toast("USB · leyendo la carpeta…")
+            Usb.discs.isEmpty() -> usbRead(play = true)
+            else -> { playUsb(store.usbDisc, store.usbTrack, store.usbPos); toast("MODE · USB · " + Usb.rootName.ifEmpty { "MÚSICA" } + " · ${Usb.discs.size} " + if (Usb.discs.size == 1) "carpeta" else "carpetas") }
+        }
+    }
+    private fun usbChoose() {
+        toast("USB · elegí el pendrive (o una carpeta con música) y tocá USAR ESTA CARPETA")
+        runCatching { usbPicker.launch(null) }.onFailure { toast("USB · este celular no deja elegir carpetas") }
+    }
+    // the folder read again; then, if asked, its first disc (or the one it was on) plays
+    private fun usbRead(play: Boolean) {
+        if (Usb.scanning) return
+        toast("USB · leyendo " + (Usb.rootName.ifEmpty { "la carpeta" }) + "…")
+        Thread {
+            val ok = Usb.scan(this)
+            main.post {
+                if (!ok) { toast("USB · no puedo leer la carpeta: ¿está enchufado el pendrive? MODE apretado para elegir otra"); store.mode = "usb"; refresh(); return@post }
+                if (Usb.discs.isEmpty()) { toast("USB · no encontré música en " + Usb.rootName); store.mode = "usb"; refresh(); return@post }
+                toast("USB · " + Usb.rootName + " · ${Usb.discs.size} " + (if (Usb.discs.size == 1) "carpeta" else "carpetas") + " con música")
+                if (play) playUsb(store.usbDisc.coerceAtMost(Usb.discs.size), 1, 0)
+                refresh()
+            }
+        }.start()
+    }
+    private fun playUsb(d: Int, t: Int, pos: Long) {
+        val c = controller ?: return
+        val disc = d.coerceIn(1, maxOf(1, Usb.discs.size)); val (items, at) = Usb.playlist(disc, t.coerceAtLeast(1))
+        store.mode = "usb"
+        if (items.isEmpty()) { refresh(); return }
+        scanning = false; main.removeCallbacks(scan); Now.on(); Now.error = ""; Now.song = ""
+        c.shuffleModeEnabled = store.usbRand; c.repeatMode = arrayOf(Player.REPEAT_MODE_OFF, Player.REPEAT_MODE_ALL, Player.REPEAT_MODE_ONE)[store.usbRep]
+        c.setMediaItems(items, at.coerceIn(0, items.size - 1), if (at < items.size && t >= 1) pos else 0)
+        c.prepare(); c.play(); refresh()
+    }
+    private fun usbKey(k: String, hold: Boolean, c: MediaController?): Boolean {
+        val here = Usb.parse(c?.currentMediaItem?.mediaId)
+        val disc = here?.first ?: store.usbDisc
+        val songs = Usb.discs.getOrNull(disc - 1)?.songs?.size ?: 0
+        val track = { n: Int -> if (n in 1..songs) { if (here != null && c != null) { c.seekTo(n - 1, 0); c.play() } else playUsb(disc, n, 0); toast("TRACK · " + n.toString().padStart(2, '0')) } else toast("La carpeta tiene $songs temas") }
+        when {
+            Usb.discs.isEmpty() && k != "eject" && k != "slot" && k != "pwr" -> { toUsb(); return true }
+            k == "sel" -> when { c == null -> {}; c.isPlaying -> c.pause(); here != null -> c.play(); else -> playUsb(store.usbDisc, store.usbTrack, store.usbPos) }
+            k == "next" -> if (here != null && c != null) { if (c.hasNextMediaItem()) c.seekToNextMediaItem() else c.seekTo(0, 0); c.play() } else playUsb(disc, 1, 0)
+            k == "prev" -> if (here != null && c != null) { c.seekToPrevious(); c.play() } else playUsb(disc, 1, 0)
+            Regex("^m[1-6]$").matches(k) -> track(k[1].digitToInt() + if (hold) 6 else 0)
+            Regex("^mem(\\d{1,3})$").matches(k) -> track(k.removePrefix("mem").toInt())
+            k == "band" || k == "discnext" || k == "discprev" -> {
+                val n = Usb.discs.size; val to = if (hold || k == "discprev") (disc - 2 + n) % n + 1 else disc % n + 1
+                playUsb(to, 1, 0); toast("DISC · $to/$n · " + Usb.discs[to - 1].name)
+            }
+            Regex("^disc(\\d{1,4})$").matches(k) -> k.removePrefix("disc").toInt().takeIf { it in 1..Usb.discs.size }?.let { playUsb(it, 1, 0); toast("DISC · $it/${Usb.discs.size} · " + Usb.discs[it - 1].name) }
+            k == "scan" -> { store.usbRand = !store.usbRand; c?.shuffleModeEnabled = store.usbRand; toast(if (store.usbRand) "RAND · los temas de la carpeta al azar" else "RAND · en orden") }
+            k == "loc" -> {
+                store.usbRep = (store.usbRep + 1) % 3
+                c?.repeatMode = arrayOf(Player.REPEAT_MODE_OFF, Player.REPEAT_MODE_ALL, Player.REPEAT_MODE_ONE)[store.usbRep]
+                toast(arrayOf("REP · sin repetir", "REP · repite la carpeta", "REP · repite el tema")[store.usbRep])
+            }
+            k == "eject" || k == "slot" -> usbRead(play = false)
+            k.startsWith("keep") -> toast("USB · los números guardan radios: MODE para volver a la radio")
+            else -> return false                                     // the rest as on the radio (VOL, ATT, PWR, the weather)
+        }
+        return true
+    }
+    private fun usbState(c: MediaController?): JSONObject {
+        val here = Usb.parse(c?.currentMediaItem?.mediaId)
+        val d = here?.first ?: store.usbDisc; val t = here?.second ?: store.usbTrack
+        val disc = Usb.discs.getOrNull(d - 1)
+        val m = if (here != null) c?.mediaMetadata else null
+        val file = disc?.songs?.getOrNull(t - 1)?.name.orEmpty()
+        val len = c?.duration?.takeIf { here != null && it > 0 } ?: 0L
+        return JSONObject().put("root", Usb.rootName).put("picked", Usb.root.isNotEmpty()).put("reading", Usb.scanning)
+            .put("discs", Usb.discs.size).put("disc", d).put("discName", disc?.name ?: "").put("n", t).put("total", disc?.songs?.size ?: 0)
+            .put("title", m?.title?.toString()?.trim()?.ifEmpty { null } ?: Usb.songName(file))
+            .put("artist", m?.artist?.toString()?.trim()?.takeIf { it != disc?.name } ?: "").put("album", m?.albumTitle?.toString()?.trim()?.takeIf { it != disc?.name } ?: "")
+            .put("len", len / 1000.0).put("pos", (if (here != null) c?.currentPosition ?: 0L else store.usbPos) / 1000.0)
+            .put("rand", store.usbRand).put("rep", store.usbRep)
+    }
+    // the face's list of discs (the pad's CARPETAS)
+    private fun discsJson(): String = JSONArray(Usb.discs.mapIndexed { i, d -> JSONObject().put("d", i + 1).put("name", d.name).put("songs", d.songs.size) }).toString()
 
     private val scan = object : Runnable {
         override fun run() {
@@ -385,6 +498,7 @@ class MainActivity : AppCompatActivity() {
         if (name.isEmpty() || !Regex("^https?://", RegexOption.IGNORE_CASE).containsMatchIn(url)) return
         store.tuned = Station(name, "", name.take(60), o.optString("cc").take(2), url)
         store.onTuned = true; Now.song = ""; Now.error = ""; Now.on()
+        radioMode(c)
         scanning = false; main.removeCallbacks(scan)
         store.tunedItem()?.let { c.setMediaItem(it); c.prepare(); c.play() }
         refresh()
@@ -397,6 +511,7 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface fun spectrum(): String = Levels.spectrumNow()
         @JavascriptInterface fun key(k: String, hold: Boolean) { main.post { this@MainActivity.key(k, hold) } }
         @JavascriptInterface fun version(): String = BuildConfigInfo.version
+        @JavascriptInterface fun discs(): String = discsJson()
         // the answer comes back as faceFound(list), or faceFound(null) when Radio Browser didn't answer
         @JavascriptInterface fun search(q: String, cc: String) {
             Thread {

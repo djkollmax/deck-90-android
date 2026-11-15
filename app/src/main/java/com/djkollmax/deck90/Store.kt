@@ -56,6 +56,27 @@ class Store(context: Context) {
         set(v) { p.edit().putBoolean("onTuned", v).apply() }
     fun current(): Station? = if (onTuned) tuned else station(band, slot)
 
+    // what the stereo plays: "radio" or "usb" (MODE), and on USB the disc, the song and where in it (for the car's
+    // resumption); RAND and REP
+    var mode: String
+        get() = p.getString("mode", "radio")!!.let { if (it == "usb") it else "radio" }
+        set(v) { p.edit().putString("mode", v).apply() }
+    var usbDisc: Int
+        get() = p.getInt("usbDisc", 1).coerceAtLeast(1)
+        set(v) { p.edit().putInt("usbDisc", v.coerceAtLeast(1)).apply() }
+    var usbTrack: Int
+        get() = p.getInt("usbTrack", 1).coerceAtLeast(1)
+        set(v) { p.edit().putInt("usbTrack", v.coerceAtLeast(1)).apply() }
+    var usbPos: Long
+        get() = p.getLong("usbPos", 0L).coerceAtLeast(0L)
+        set(v) { p.edit().putLong("usbPos", v.coerceAtLeast(0L)).apply() }
+    var usbRand: Boolean
+        get() = p.getBoolean("usbRand", false)
+        set(v) { p.edit().putBoolean("usbRand", v).apply() }
+    var usbRep: Int                                                  // 0 off, 1 the disc, 2 the song
+        get() = p.getInt("usbRep", 0).coerceIn(0, 2)
+        set(v) { p.edit().putInt("usbRep", v.coerceIn(0, 2)).apply() }
+
     // the weather's last place (rounded, about a kilometre), and whether the location was asked for already
     fun lastPlace(): Pair<Double, Double>? {
         val la = p.getString("wxLat", null)?.toDoubleOrNull() ?: return null
@@ -110,7 +131,7 @@ class Store(context: Context) {
                 .setMediaType(MediaMetadata.MEDIA_TYPE_RADIO_STATION).build())
             .build()
     }
-    fun itemFor(id: String?): MediaItem? = if (id == TUNED) tunedItem() else parse(id)?.let { (b, s) -> item(b, s) }
+    fun itemFor(id: String?): MediaItem? = if (id == TUNED) tunedItem() else Usb.parse(id)?.let { (d, t) -> Usb.item(d, t) } ?: parse(id)?.let { (b, s) -> item(b, s) }
 
     // the band's memories in order (the empty ones left out), and where the one asked for is among them
     fun playlist(band: String, slot: Int): Pair<List<MediaItem>, Int> {

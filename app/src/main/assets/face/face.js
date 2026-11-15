@@ -29,6 +29,7 @@ const app = window.Deck90Android || {                              // a browser:
   tune: j => toast('sintonizo ' + JSON.parse(j).name),
   levels: () => { const t = Date.now() / 300, l = 0.5 + 0.4 * Math.sin(t), r = 0.5 + 0.4 * Math.cos(t * 1.3); return [l, r, l * .35, r * .35].join(','); },
   spectrum: () => { const t = Date.now() / 400; return Array.from({ length: 28 }, (_, k) => (-28 - k * 0.9 + 8 * Math.sin(t + k * .7)).toFixed(1)).join(','); },
+  discs: () => JSON.stringify(Array.from({ length: 9 }, (_, i) => ({ d: i + 1, name: ['Abbey Road', 'Kind of Blue', 'Rumours', 'Artaud', 'Clics Modernos', 'Discovery', 'Random Access Memories', 'Thriller', 'Nevermind'][i], songs: 9 + i }))),
   key: (k, hold) => { if (k === 'loc' && hold) setTimeout(() => faceNear('Mar del Plata', [{ name: 'Radio de la costa', url: 'http://x', codec: 'MP3', bitrate: 128, cc: 'AR', place: 'Mar del Plata' }, { name: 'Onda Atlántica', url: 'http://y', codec: 'AAC', bitrate: 64, cc: 'AR', place: '' }]), 300); else toast('tecla ' + k); },
 };
 const face = el('stFace');
@@ -130,7 +131,7 @@ function key(k, hold) {
     toast('DISP · ' + STEREO_DISP_NAME[look.disp] + (look.disp === 'time' ? ' (la radio es en vivo)' : ''), 1500);
     read.last = ''; read(); return;
   }
-  if (k === 'scan' && hold) { finderOpen(true); return; }          // as on the PC: held, any station in the world
+  if (k === 'scan' && hold && view.mode !== 'usb') { finderOpen(true); return; }   // as on the PC: held, any station in the world
   app.key(k, !!hold);
   setTimeout(read, 60);
 }
@@ -145,7 +146,7 @@ function key(k, hold) {
       volT = setTimeout(function rep() { key(k); volT = setTimeout(rep, 100); }, 350);
       return;
     }
-    if (/^(m[1-6]|sdm|band|scan|pwr|loc)$/.test(k)) holdT = setTimeout(() => { held = true; key(k, true); }, 1000);
+    if (/^(m[1-6]|sdm|band|scan|pwr|loc|mode)$/.test(k)) holdT = setTimeout(() => { held = true; key(k, true); }, 1000);
   });
   const up = () => { clearTimeout(holdT); clearTimeout(volT); face.querySelectorAll('.st-hot.down').forEach(b => b.classList.remove('down')); };
   ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => face.addEventListener(ev, up));
@@ -167,7 +168,7 @@ const BANDS = ['FM1', 'FM2', 'FM3', 'FM4', 'FM5', 'HI-FI', 'AM', 'LOCAL'];   // 
   const pad = el('pad');
   pad.addEventListener('pointerdown', e => {
     const m = e.target.closest('[data-m]'), k = e.target.closest('[data-k]'); held = false;
-    if (m) holdT = setTimeout(() => { held = true; app.key('keep' + m.dataset.m, true); setTimeout(read, 80); }, 1000);
+    if (m && view.mode !== 'usb') holdT = setTimeout(() => { held = true; app.key('keep' + m.dataset.m, true); setTimeout(read, 80); }, 1000);
     else if (k && k.dataset.k === 'scan') holdT = setTimeout(() => { held = true; key('scan', true); }, 1000);   // as on the face: the world search
   });
   ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => pad.addEventListener(ev, () => clearTimeout(holdT)));
@@ -177,12 +178,29 @@ const BANDS = ['FM1', 'FM2', 'FM3', 'FM4', 'FM5', 'HI-FI', 'AM', 'LOCAL'];   // 
     if (b.dataset.v) { viewSet(b.dataset.v); return; }
     if (b.dataset.band) app.key('band:' + b.dataset.band.replace('-', ''), false);
     else if (b.dataset.m) app.key('mem' + b.dataset.m, false);
+    else if (b.dataset.k === 'discs') { discsOpen(); return; }
     else if (b.dataset.k) { key(b.dataset.k); return; }
     setTimeout(read, 80);
   });
   pad.addEventListener('contextmenu', e => e.preventDefault());
 })();
+const USB_PAD = [['discprev', '◀ CARPETA'], ['discs', 'CARPETAS'], ['discnext', 'CARPETA ▶'], ['mode', 'RADIO']];
 function padSync(s) {
+  const usb = s.mode === 'usb', bands = el('padBands');
+  if (bands.dataset.mode !== s.mode) {                               // USB: the folders in place of the bands
+    bands.dataset.mode = s.mode; bands.classList.toggle('usb', usb);
+    bands.replaceChildren(...(usb ? USB_PAD.map(([k, t]) => { const x = document.createElement('button'); x.dataset.k = k; x.textContent = t; return x; })
+      : BANDS.map(b => { const x = document.createElement('button'); x.textContent = b; x.dataset.band = b; return x; })));
+    const v = document.querySelector('#padViews [data-v=radio]'); if (v) v.textContent = usb ? 'USB' : 'RADIO';
+    const sc = document.querySelector('.pad-row [data-k=scan]'); if (sc) sc.textContent = usb ? 'RAND' : 'SCAN';
+  }
+  if (usb) {
+    const names = s.memories || [], n = s.usb ? s.usb.n : 0;
+    el('padMems').querySelectorAll('button').forEach((b, i) => {
+      const x = names[i] || ''; b.querySelector('small').textContent = x || '—'; b.classList.toggle('empty', !x); b.classList.toggle('on', i + 1 === n);
+    });
+    return;
+  }
   el('padBands').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.band === s.band));
   const names = s.memories || [];
   el('padMems').querySelectorAll('button').forEach((b, i) => {
@@ -225,6 +243,26 @@ function dispRadio(radio) {
   if (was.name !== name) { was.name = name; disp._artist.textContent = (was.live ? name : '').toLocaleUpperCase('es').slice(0, 42); }
   if (was.quality !== quality) { was.quality = quality; disp._renderFooter(); }
 }
+// USB (MODE): a pendrive's song on the display as the PC's stereo shows a CD (title big; artist, album and the
+// folder under it; the song's number, the time left and the quality below)
+function usbTrack(s, u, extra) {
+  let title, artist;
+  if (!u.picked) { title = 'NO USB'; artist = 'MODE HELD: PICK THE PENDRIVE OR A FOLDER'; }
+  else if (u.reading) { title = 'READING'; artist = (u.root || 'USB').toUpperCase(); }
+  else if (!u.discs) { title = s.error ? 'NO USB' : 'NO MUSIC'; artist = 'EJECT READS ' + (u.root || 'THE FOLDER').toUpperCase() + ' AGAIN'; }
+  else if (s.error) { title = 'NO USB'; artist = 'PLUG THE PENDRIVE IN AND PRESS SEL'; }
+  else {
+    title = extra || u.title || 'USB';
+    artist = [u.artist, u.album || u.discName].filter(Boolean).join(' · ') + (s.playing ? '' : ' · PAUSE') + (u.rand ? ' · RAND' : '') + (u.rep === 1 ? ' · REP' : u.rep === 2 ? ' · REP 1' : '');
+  }
+  return { title, artist, number: u.discs && !s.error ? u.n : 0, length: u.len || 0, quality: s.quality || '', disc: !!u.discs, source: 'USB', playing: true };
+}
+function usbNow(s, u) {
+  el('nowBand').textContent = 'USB' + (u.discs ? ' · ' + u.disc + '/' + u.discs + ' · TEMA ' + u.n + '/' + u.total : '') + (u.rand ? ' · RAND' : '') + (u.rep ? ' · REP' : '') + (s.sleep > 0 ? ' · SLEEP ' + s.sleep + "'" : '');
+  el('nowName').textContent = u.title || (u.picked ? u.root || 'USB' : 'USB');
+  el('nowSong').textContent = s.error ? 'Enchufá el pendrive y tocá ▶' : [u.artist, u.album || u.discName].filter(Boolean).join(' · ');
+  const q = el('nowQ'); q.textContent = (/FLAC|ALAC|WAV/.test(s.quality || '') ? 'HI-FI · ' : '') + (s.quality || ''); q.classList.toggle('hifi', /FLAC|ALAC|WAV/.test(s.quality || ''));
+}
 function read() {
   let s;
   try { s = JSON.parse(app.state()); } catch (_) { return; }
@@ -235,17 +273,21 @@ function read() {
   const line = trouble || (!live ? '' : s.song && Math.floor(Date.now() / 4000) % 3 !== 2 ? s.song : s.station || '');
   // SLEEP: the minutes left take turns with the quality, in its corner of the display
   const corner = s.sleep > 0 && Math.floor(Date.now() / 4000) % 2 ? 'SLEEP ' + s.sleep : live ? s.quality || '' : '';
+  const u = s.mode === 'usb' && s.usb, usbOn = !!u && !greet;
   const radio = greet ? { band: '', frequency: greet, preset: s.slot || 1, live: false, name: '', mono: false, local: false, quality: '' }
     : extra
     ? { band: '', frequency: extra, preset: s.slot || 1, live, name: context(s), mono: !!s.mono, local: s.band === 'LOCAL' && !s.tuned, quality: corner }
     : { band: s.memo ? 'A.MEM' : s.tuned ? '' : s.band, frequency: s.freq || shortName(s.station).toUpperCase(), preset: s.slot || 1, live, name: line, mono: !!s.mono, local: s.band === 'LOCAL' && !s.tuned, quality: corner };
-  const key = JSON.stringify([radio, off, s.memories, s.scan, s.slot, s.band]);
+  const track = usbOn ? usbTrack(s, u, extra) : null;
+  const key = JSON.stringify([track || radio, off, s.memories, s.scan, s.slot, s.band, s.mode]);
   face.classList.toggle('off', off);
   el('stereoView').classList.toggle('aux-on', live);
+  if (usbOn && disp && !off) disp.setElapsed(u.pos || 0);
   if (key === read.last) return;
   read.last = key;
-  if (disp) dispRadio(radio);
+  if (disp) { if (track) disp.setTrack(track); else dispRadio(radio); }
   padSync(s);
+  if (u) { usbNow(s, u); if (finderShown()) finderKeepSync(); return; }
   el('nowBand').textContent = (s.memo ? 'A.MEM · ' : '') + (s.tuned ? 'MUNDO' + (s.cc ? ' · ' + s.cc : '') : s.band + (s.town ? ' · ' + s.town.toUpperCase() : '') + ' · ' + s.slot + (s.freq ? ' · ' + s.freq : '')) + (s.scan ? ' · SCAN' : '') + (s.sleep > 0 ? ' · SLEEP ' + s.sleep + "'" : '');
   el('nowName').textContent = s.station || 'DECK 90';
   el('nowSong').textContent = trouble || s.song || '';
@@ -603,7 +645,7 @@ let rfResults = [], rfBusy = false;
 })();
 function finderShown() { return el('rfFind').classList.contains('show'); }
 function finderOpen(on, near) {
-  el('rfFind').classList.toggle('show', on);
+  el('rfFind').classList.toggle('show', on); el('rfFind').classList.remove('list');
   if (!on) return;
   el('rfTitle').textContent = 'BUSCAR RADIO EN EL MUNDO';
   if (near) return finderKeepSync();
@@ -657,7 +699,26 @@ el('rfClose').addEventListener('click', () => finderOpen(false));
 el('rfFind').addEventListener('click', e => { if (e.target.id === 'rfFind') finderOpen(false); });
 el('rfCountry').addEventListener('change', finderSearch);
 el('rfName').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); finderSearch(); } });
+// USB's folders (the pad's CARPETAS): the search's window as a list; one touched plays from its first song
+function discsOpen() {
+  let list = [];
+  try { list = JSON.parse(app.discs ? app.discs() : '[]'); } catch (_) {}
+  el('rfFind').classList.add('show', 'list');
+  el('rfTitle').textContent = 'CARPETAS · ' + ((view.usb && view.usb.root) || 'USB').toUpperCase();
+  el('rfMsg').textContent = list.length ? list.length + (list.length === 1 ? ' carpeta' : ' carpetas') + ' con música' : 'No hay música: MODE apretado para elegir el pendrive';
+  const now = view.usb ? view.usb.disc : 0;
+  el('rfList').replaceChildren(...list.map(d => {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'rf-item' + (d.d === now ? ' on' : ''); b.dataset.disc = d.d;
+    const name = document.createElement('b'); name.textContent = d.name;
+    const n = document.createElement('small'); n.textContent = d.songs + (d.songs === 1 ? ' tema' : ' temas');
+    const i = document.createElement('i'); i.textContent = d.d;
+    b.append(name, n, i); return b;
+  }));
+  const on = el('rfList').querySelector('.on'); if (on) on.scrollIntoView({ block: 'center' });
+}
 el('rfList').addEventListener('click', e => {
+  const d = e.target.closest('[data-disc]');
+  if (d) { app.key('disc' + d.dataset.disc, false); finderOpen(false); setTimeout(read, 300); return; }
   const b = e.target.closest('.rf-item'); if (!b) return;
   const r = rfResults[Number(b.dataset.i)]; if (!r) return;
   app.tune(JSON.stringify(r));

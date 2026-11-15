@@ -44,7 +44,8 @@ import java.io.IOException
 //  THE RADIO: one player for the phone and for Android Auto. Its browse tree is the bands and their memories; a
 //  memory plays with the rest of its band as the list (so ◀◀ ▶▶ in the car change stations). A memory's address is
 //  found when it's played (Resolver): the one it came with, the one that played last, or Radio Browser's best.
-//  The song a station sends (ICY) goes to the session as the title, the station's name as the artist.
+//  The song a station sends (ICY) goes to the session as the title, the station's name as the artist. USB (Usb.kt):
+//  a pendrive's folders as discs, a song played with the rest of its disc.
 // ═══════════════════════════════════════
 @UnstableApi
 class RadioService : MediaLibraryService() {
@@ -59,6 +60,7 @@ class RadioService : MediaLibraryService() {
         super.onCreate()
         BuildConfigInfo.version = runCatching { packageManager.getPackageInfo(packageName, 0).versionName ?: "0" }.getOrDefault("0")
         store = Store(this)
+        Usb.load(this)
         val http = DefaultHttpDataSource.Factory().setUserAgent("Deck90-Android/" + BuildConfigInfo.version)
             .setAllowCrossProtocolRedirects(true).setConnectTimeoutMs(10_000).setReadTimeoutMs(15_000)
         val data = ResolvingDataSource.Factory(DefaultDataSource.Factory(this, http), Resolver(store))
@@ -71,9 +73,24 @@ class RadioService : MediaLibraryService() {
         Sleep.attach(player)
         player.addListener(object : Player.Listener {
             override fun onMediaItemTransition(item: MediaItem?, reason: Int) {
-                if (item?.mediaId == Store.TUNED) store.onTuned = true
-                else Store.parse(item?.mediaId)?.let { (b, s) -> store.band = b; store.slot = s; store.onTuned = false }
-                Now.song = ""; Now.changed()
+                val usb = Usb.parse(item?.mediaId)
+                if (usb != null) { store.mode = "usb"; store.usbDisc = usb.first; store.usbTrack = usb.second; store.usbPos = 0 }
+                else if (item?.mediaId == Store.TUNED) { store.mode = "radio"; store.onTuned = true }
+                else Store.parse(item?.mediaId)?.let { (b, s) -> store.mode = "radio"; store.band = b; store.slot = s; store.onTuned = false }
+                Now.song = ""; Now.error = ""; Now.changed()
+            }
+            override fun onMediaMetadataChanged(m: MediaMetadata) { Now.changed() }
+            // a song from USB: its own tags once the file is read (the item keeps them: asked once)
+            override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
+                val item = player.currentMediaItem ?: return
+                if (Usb.parse(item.mediaId) == null || item.mediaMetadata.extras?.getBoolean("tags") == true) return
+                val t = Tags.read(tracks)
+                val m = item.mediaMetadata.buildUpon().apply {
+                    t?.title?.let { setTitle(it) }; t?.artist?.let { setArtist(it) }; t?.album?.let { setAlbumTitle(it) }
+                    t?.art?.let { setArtworkData(it, MediaMetadata.PICTURE_TYPE_FRONT_COVER) }
+                    setExtras(Bundle().apply { putBoolean("tags", true) })
+                }.build()
+                runCatching { player.replaceMediaItem(player.currentMediaItemIndex, item.buildUpon().setMediaMetadata(m).build()) }
             }
             override fun onMetadata(metadata: Metadata) {
                 for (i in 0 until metadata.length()) {
@@ -81,10 +98,14 @@ class RadioService : MediaLibraryService() {
                     if (e is IcyInfo) { Now.song = (e.title ?: "").trim(); Now.changed() }
                 }
             }
-            override fun onIsPlayingChanged(isPlaying: Boolean) { Now.changed() }
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                if (!isPlaying && Usb.parse(player.currentMediaItem?.mediaId) != null) store.usbPos = player.currentPosition   // the car comes back here
+                Now.changed()
+            }
             override fun onPlayerError(error: PlaybackException) {
                 // the address stopped answering: forgotten, and the station asked of Radio Browser once more
                 val item = player.currentMediaItem ?: return
+                if (Usb.parse(item.mediaId) != null) { Now.error = "NO USB"; Now.changed(); return }   // the pendrive is out
                 val st = (if (item.mediaId == Store.TUNED) store.tuned else Store.parse(item.mediaId)?.let { (b, s) -> store.station(b, s) }) ?: return
                 store.resolvedSet(st, null)
                 if (retried != item.mediaId) { retried = item.mediaId; Resolver.fail(st); player.prepare(); player.play() }
@@ -119,7 +140,10 @@ class RadioService : MediaLibraryService() {
 
         override fun onGetChildren(session: MediaLibrarySession, browser: MediaSession.ControllerInfo, parentId: String, page: Int, pageSize: Int, params: LibraryParams?): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
             val list = when {
-                parentId == "root" -> Bands.order.map { folder("band:$it", "RADIO " + Bands.label(it)) } + folder("band:${Bands.LOCAL}", "RADIOS LOCALES")
+                parentId == "root" -> Bands.order.map { folder("band:$it", "RADIO " + Bands.label(it)) } + folder("band:${Bands.LOCAL}", "RADIOS LOCALES") +
+                    (if (Usb.discs.isNotEmpty()) listOf(folder("usb", "USB · " + Usb.rootName.ifEmpty { "MÚSICA" })) else emptyList())
+                parentId == "usb" -> (1..Usb.discs.size).mapNotNull { Usb.discItem(it) }
+                parentId.startsWith("usbdisc:") -> parentId.removePrefix("usbdisc:").toIntOrNull()?.let { d -> Usb.playlist(d, 1).first } ?: emptyList()
                 parentId == "band:${Bands.LOCAL}" -> return local(params)
                 parentId.startsWith("band:") -> parentId.removePrefix("band:").let { b -> (1..Bands.SLOTS).mapNotNull { store.item(b, it) } }
                 else -> emptyList()
@@ -147,7 +171,14 @@ class RadioService : MediaLibraryService() {
 
         // a memory asked for (by the car or the phone, with only its id): its whole band, starting there
         override fun onSetMediaItems(mediaSession: MediaSession, controller: MediaSession.ControllerInfo, mediaItems: MutableList<MediaItem>, startIndex: Int, startPositionMs: Long): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
-            val asked = Store.parse(mediaItems.getOrNull(if (startIndex == C.INDEX_UNSET) 0 else startIndex)?.mediaId)
+            val askedId = mediaItems.getOrNull(if (startIndex == C.INDEX_UNSET) 0 else startIndex)?.mediaId
+            val song = Usb.parse(askedId)
+            if (mediaItems.size <= 1 && song != null) {                   // a song: its whole disc, from there
+                val (items, at) = Usb.playlist(song.first, song.second)
+                Now.error = ""
+                return Futures.immediateFuture(MediaSession.MediaItemsWithStartPosition(items, at, C.TIME_UNSET))
+            }
+            val asked = Store.parse(askedId)
             if (mediaItems.size <= 1 && asked != null) {
                 val (items, at) = store.playlist(asked.first, asked.second)
                 retried = ""; Now.error = ""
@@ -163,6 +194,10 @@ class RadioService : MediaLibraryService() {
 
         // the car starts (or "play" on the headphones): the last station heard
         override fun onPlaybackResumption(mediaSession: MediaSession, controller: MediaSession.ControllerInfo): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
+            if (store.mode == "usb" && Usb.item(store.usbDisc, store.usbTrack) != null) {
+                val (items, at) = Usb.playlist(store.usbDisc, store.usbTrack)
+                return Futures.immediateFuture(MediaSession.MediaItemsWithStartPosition(items, at, store.usbPos))
+            }
             if (store.onTuned) store.tunedItem()?.let { return Futures.immediateFuture(MediaSession.MediaItemsWithStartPosition(listOf(it), 0, C.TIME_UNSET)) }
             val (items, at) = store.playlist(store.band, store.slot)
             return Futures.immediateFuture(MediaSession.MediaItemsWithStartPosition(items, at, C.TIME_UNSET))
