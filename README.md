@@ -1,7 +1,8 @@
 # Deck 90 para Android
 
-La radio de [Deck 90](https://github.com/djkollmax/deck-90) en el celular, la tablet y el auto: las mismas bandas y
-memorias que en la PC (FM1 a FM5, HI-FI y AM, doce memorias por banda) y el frente del estéreo del auto con su
+El estéreo de [Deck 90](https://github.com/djkollmax/deck-90) en el celular, la tablet y el auto: la radio con las
+mismas bandas y memorias que en la PC (FM1 a FM5, HI-FI y AM, doce memorias por banda) y LOCAL, las radios de donde
+estés; la música de un pendrive (USB) y los CD de una lectora por USB; y el frente del estéreo del auto con su
 display, sus teclas y sus looks.
 
 ![El celular parado: RADIO, VU y ESPECTRO](docs/celular.jpg)
