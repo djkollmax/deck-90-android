@@ -2,8 +2,8 @@
 
 El estéreo de [Deck 90](https://github.com/djkollmax/deck-90) en el celular, la tablet y el auto: la radio con las
 mismas bandas y memorias que en la PC (FM1 a FM5, HI-FI y AM, doce memorias por banda) y LOCAL, las radios de donde
-estés; la música de un pendrive (USB) y los CD de una lectora por USB; y el frente del estéreo del auto con su
-display, sus teclas y sus looks.
+estés; la música de un pendrive (USB), los CD de una lectora por USB y tu música de Jellyfin (SERVER); y el frente
+del estéreo del auto con su display, sus teclas y sus looks.
 
 ![El celular parado: RADIO, VU y ESPECTRO](docs/celular.jpg)
 
@@ -47,7 +47,7 @@ Son las mismas que en la PC:
 - **PWR** apaga (GOOD BYE) y prende (HELLO). Mantenido, programa el apagado automático (**SLEEP**): 15, 30, 60 o 90
   minutos, y otra vez para sacarlo. Al final la radio baja sola en 10 segundos y se apaga, aunque la pantalla esté
   apagada.
-- **MODE** pasa de la radio a **USB** y al **CD**, y de vuelta a la radio.
+- **MODE** pasa de la radio a **USB**, al **CD** y a **SERVER**, y de vuelta a la radio.
 
 ## USB y CD
 
@@ -60,6 +60,21 @@ Son las mismas que en la PC:
   también. **EJECT** abre la lectora. Si la lectora no arranca, le falta corriente: usá un cable en Y o un hub con
   fuente.
 
+## SERVER: tu música de Jellyfin
+
+Como el DM-90 de la PC. La primera vez que elegís SERVER con MODE, pide la dirección del servidor (por ejemplo
+`192.168.0.199:8096`), el usuario y la contraseña. Deck 90 guarda el permiso que le da Jellyfin, nunca la contraseña.
+MODE apretado un segundo vuelve a pedirlos.
+
+- **MÚSICA** (arriba de los números, o EJECT) abre las listas: **AL AZAR**, **RECIENTES**, **DISCOS**, **ARTISTAS**,
+  **LO QUE SUENA** y la búsqueda, que encuentra artistas, discos y temas mientras escribís.
+- ◀◀ ▶▶ pasan de tema, 1 a 6 (y 7 a 12 manteniendo) van a un tema, **BAND** pasa de disco, **SCAN** es RAND y **LOC**
+  es REP.
+- Suena en la calidad del archivo; lo que el celular no reproduce, el servidor lo manda como FLAC.
+- **Fuera de casa**, con [Tailscale](https://tailscale.com) prendido en el celular y en la PC: poné como servidor la
+  dirección de Tailscale de la PC (`100.x.x.x:8096`), que anda en casa y afuera. En FLAC, una hora de música son unos
+  400 MB de datos.
+
 ## En la tablet
 
 Lo mismo que en el celular parado, en cualquier posición y con letras y teclas más grandes. Acostada, las memorias van
@@ -71,9 +86,8 @@ radio.
 ## En el auto (Android Auto)
 
 Las bandas y sus memorias en la pantalla del auto, **RADIOS LOCALES** (las de la zona por donde va el auto) y, si
-están, **USB** y **CD** con sus temas. ◀◀ ▶▶
-pasan de radio dentro de la banda, y se ve el tema que pasa la radio. Android Auto funciona desde el celular: las
-tablets no lo tienen.
+están, **USB**, **CD** y **SERVER** con sus temas. ◀◀ ▶▶ pasan de radio dentro de la banda, y se ve el tema que pasa
+la radio. Android Auto funciona desde el celular: las tablets no lo tienen.
 
 ## Las radios
 
@@ -101,7 +115,6 @@ Android Auto muestra solo las apps de Play Store, salvo que lo habilites una vez
 
 ## Lo que viene
 
-- **SERVER:** tu música de Jellyfin, el DM-90 de la PC, en el auto y en el celular, con MODE como en la PC.
 - Pasar las memorias de radio de la PC al celular.
 - Buscar y elegir radios por voz en Android Auto.
 - Una búsqueda de radios mejor.

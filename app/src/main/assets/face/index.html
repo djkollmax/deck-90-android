@@ -48,6 +48,28 @@
     <div class="rf-help">Tocá una radio para escucharla. Las de calidad CD dicen HI-FI. Los datos son de Radio Browser.</div>
   </div>
 </div>
+<!-- SERVER (MODE): the person's Jellyfin music. MÚSICA: the lists; the sign-in asks the server, user and password once -->
+<div id="jfBox" class="sheet" role="dialog" aria-label="Música del servidor">
+  <div class="rf-card">
+    <div class="rf-head"><button type="button" id="jfBack" aria-label="Atrás">◀</button><span id="jfTitle">MÚSICA</span><button type="button" id="jfClose" aria-label="Cerrar">✕</button></div>
+    <input id="jfFind" class="jf-find" spellcheck="false" autocomplete="off" enterkeyhint="search" placeholder="Buscar: artista, disco o tema">
+    <div class="rf-msg" id="jfMsg"></div>
+    <div id="jfList" class="rf-list" role="listbox"></div>
+  </div>
+</div>
+<div id="jfLogin" class="sheet" role="dialog" aria-label="Entrar al servidor">
+  <div class="rf-card jf-login">
+    <div class="rf-head"><span>SERVER · JELLYFIN</span><button type="button" id="jfLoginClose" aria-label="Cerrar">✕</button></div>
+    <label>SERVIDOR<input id="jfAddr" inputmode="url" spellcheck="false" autocomplete="off" placeholder="192.168.0.199:8096"></label>
+    <label>USUARIO<input id="jfUser" spellcheck="false" autocomplete="username" autocapitalize="none"></label>
+    <label>CONTRASEÑA<input id="jfPw" type="password" autocomplete="current-password"></label>
+    <button type="button" id="jfGo">ENTRAR</button>
+    <div class="rf-msg" id="jfLoginMsg"></div>
+    <div class="rf-help">La contraseña va solo a tu servidor: Deck 90 guarda el permiso que te da Jellyfin, nunca la contraseña.
+      Fuera de casa, con Tailscale prendido en el celular, poné la dirección de Tailscale de la PC (100.x.x.x:8096).</div>
+    <button type="button" id="jfOut">SALIR DEL SERVIDOR</button>
+  </div>
+</div>
 <div id="toast" role="status"></div>
 <script src="dp940-display.js"></script>
 <script src="face.js"></script>

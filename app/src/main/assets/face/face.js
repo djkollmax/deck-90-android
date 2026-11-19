@@ -30,6 +30,20 @@ const app = window.Deck90Android || {                              // a browser:
   levels: () => { const t = Date.now() / 300, l = 0.5 + 0.4 * Math.sin(t), r = 0.5 + 0.4 * Math.cos(t * 1.3); return [l, r, l * .35, r * .35].join(','); },
   spectrum: () => { const t = Date.now() / 400; return Array.from({ length: 28 }, (_, k) => (-28 - k * 0.9 + 8 * Math.sin(t + k * .7)).toFixed(1)).join(','); },
   discs: () => JSON.stringify(Array.from({ length: 9 }, (_, i) => ({ d: i + 1, name: ['Abbey Road', 'Kind of Blue', 'Rumours', 'Artaud', 'Clics Modernos', 'Discovery', 'Random Access Memories', 'Thriller', 'Nevermind'][i], songs: 9 + i }))),
+  // SERVER, for a look in a browser: a small pretend library
+  jfServer: () => JSON.stringify({ server: 'http://192.168.0.199:8096', name: 'Damián', signedIn: !!window.jfDemo }),
+  jfSignIn: (a, u) => setTimeout(() => { window.jfDemo = true; faceJf('signed', { name: u, albums: 1402 }); }, 300),
+  jfSignOut: () => { window.jfDemo = false; },
+  jfPlay: () => {},
+  jfList: (req, kind, id, text) => setTimeout(() => {
+    const albums = [['Immunity', 'Jon Hopkins', 2013], ['Discovery', 'Daft Punk', 2001], ['Random Access Memories', 'Daft Punk', 2013], ['After Hours', 'The Weeknd', 2020], ['Inside In / Inside Out', 'The Kooks', 2006], ['In Ghost Colours', 'Cut Copy', 2008]]
+      .map(([name, a, y], i) => ({ t: 'album', id: 'a' + i, name, sub: a + ' · ' + y }));
+    const songs = ['We Disappear', 'Open Eye Signal', 'Breathe This Air', 'Collider', 'Abandon Window', 'Form by Firelight', 'Sun Harmonics', 'Immunity']
+      .map((name, i) => ({ t: 'song', id: 's' + i, i, n: i + 1, name, sub: 'Jon Hopkins · Immunity', len: 200 + i * 37, q: 'FLAC 24/44.1' }));
+    const items = kind === 'album' || kind === 'queue' ? songs : kind === 'artists' ? ['Cut Copy', 'Daft Punk', 'Jon Hopkins', 'The Kooks', 'The Weeknd'].map((name, i) => ({ t: 'artist', id: 'r' + i, name }))
+      : kind === 'search' ? [{ t: 'artist', id: 'r2', name: 'Jon Hopkins' }, albums[0], { ...songs[1], t: 'found' }] : albums;
+    faceJfList(req, { kind, id, items, title: kind === 'album' ? 'Immunity' : '' });
+  }, 150),
   key: (k, hold) => { if (k === 'loc' && hold) setTimeout(() => faceNear('Mar del Plata', [{ name: 'Radio de la costa', url: 'http://x', codec: 'MP3', bitrate: 128, cc: 'AR', place: 'Mar del Plata' }, { name: 'Onda Atlántica', url: 'http://y', codec: 'AAC', bitrate: 64, cc: 'AR', place: '' }]), 300); else toast('tecla ' + k); },
 };
 const face = el('stFace');
@@ -179,6 +193,7 @@ const BANDS = ['FM1', 'FM2', 'FM3', 'FM4', 'FM5', 'HI-FI', 'AM', 'LOCAL'];   // 
     if (b.dataset.band) app.key('band:' + b.dataset.band.replace('-', ''), false);
     else if (b.dataset.m) app.key('mem' + b.dataset.m, false);
     else if (b.dataset.k === 'discs') { discsOpen(); return; }
+    else if (b.dataset.k === 'jfbrowse') { faceJf('browse'); return; }
     else if (b.dataset.k) { key(b.dataset.k); return; }
     setTimeout(read, 80);
   });
@@ -186,17 +201,18 @@ const BANDS = ['FM1', 'FM2', 'FM3', 'FM4', 'FM5', 'HI-FI', 'AM', 'LOCAL'];   // 
 })();
 const USB_PAD = [['discprev', '◀ CARPETA'], ['discs', 'CARPETAS'], ['discnext', 'CARPETA ▶'], ['mode:radio', 'RADIO']];
 const CD_PAD = [['eject', '⏏ EXPULSAR'], ['scan', 'RAND'], ['loc', 'REP'], ['mode:radio', 'RADIO']];
+const JF_PAD = [['jfbrowse', 'MÚSICA'], ['scan', 'RAND'], ['loc', 'REP'], ['mode:radio', 'RADIO']];
 function padSync(s) {
-  const usb = s.mode === 'usb' || s.mode === 'cd', bands = el('padBands');
+  const usb = s.mode === 'usb' || s.mode === 'cd' || s.mode === 'server', bands = el('padBands');
   if (bands.dataset.mode !== s.mode) {                               // USB: the folders in place of the bands
     bands.dataset.mode = s.mode; bands.classList.toggle('usb', usb);
-    bands.replaceChildren(...(usb ? (s.mode === 'cd' ? CD_PAD : USB_PAD).map(([k, t]) => { const x = document.createElement('button'); x.dataset.k = k; x.textContent = t; return x; })
+    bands.replaceChildren(...(usb ? (s.mode === 'cd' ? CD_PAD : s.mode === 'server' ? JF_PAD : USB_PAD).map(([k, t]) => { const x = document.createElement('button'); x.dataset.k = k; x.textContent = t; return x; })
       : BANDS.map(b => { const x = document.createElement('button'); x.textContent = b; x.dataset.band = b; return x; })));
     const v = document.querySelector('#padViews [data-v=radio]'); if (v) v.textContent = usb ? s.mode.toUpperCase() : 'RADIO';
     const sc = document.querySelector('.pad-row [data-k=scan]'); if (sc) sc.textContent = usb ? 'RAND' : 'SCAN';
   }
   if (usb) {
-    const names = s.memories || [], n = (s.usb || s.cd || {}).n || 0;
+    const names = s.memories || [], n = (s.usb || s.cd || s.jf || {}).n || 0;
     el('padMems').querySelectorAll('button').forEach((b, i) => {
       const x = names[i] || ''; b.querySelector('small').textContent = x || '—'; b.classList.toggle('empty', !x); b.classList.toggle('on', i + 1 === n);
     });
@@ -281,6 +297,24 @@ function cdNow(s, u) {
     : [u.artist, u.album, u.year].filter(Boolean).join(' · ');
   const q = el('nowQ'); q.textContent = s.quality ? (/PCM|FLAC/.test(s.quality) ? 'HI-FI · ' : '') + s.quality : ''; q.classList.toggle('hifi', /PCM|FLAC/.test(s.quality || ''));
 }
+// SERVER (MODE): a Jellyfin song as the PC's stereo shows the DM-90's (its display speaks English, as the units do)
+function jfTrack(s, u, extra) {
+  let title, artist, ok = false;
+  if (!u.signedIn) { title = 'SIGN IN'; artist = 'SERVER, USER AND PASSWORD · MODE HELD'; }
+  else if (s.error === 'NO SERVER') { title = 'NO SERVER'; artist = 'IS IT ON? AWAY FROM HOME: TAILSCALE'; }
+  else if (!u.total) { title = u.reading ? 'READING' : 'SERVER'; artist = (u.albums ? u.albums + ' ALBUMS · ' : '') + 'EJECT: THE LISTS'; }
+  else {
+    ok = true; title = extra || u.title || 'SERVER';
+    artist = [u.artist, u.album].filter(Boolean).join(' · ') + (s.playing ? '' : ' · PAUSE') + (u.rand ? ' · RAND' : '') + (u.rep === 1 ? ' · REP' : u.rep === 2 ? ' · REP 1' : '');
+  }
+  return { title, artist, number: ok ? (u.track || u.n) : 0, length: u.len || 0, quality: s.quality || '', disc: ok, source: 'SRV', playing: true };
+}
+function jfNow(s, u) {
+  el('nowBand').textContent = 'SERVER' + (u.total ? ' · TEMA ' + u.n + '/' + u.total : u.name ? ' · ' + u.name.toUpperCase() : '') + (u.rand ? ' · RAND' : '') + (u.rep ? ' · REP' : '') + (s.sleep > 0 ? ' · SLEEP ' + s.sleep + "'" : '');
+  el('nowName').textContent = !u.signedIn ? 'Tu música de Jellyfin' : s.error === 'NO SERVER' ? 'No contesta el servidor' : u.title || 'Elegí qué escuchar';
+  el('nowSong').textContent = !u.signedIn ? 'MODE apretado: servidor, usuario y contraseña' : s.error === 'NO SERVER' ? '¿Está prendido? Fuera de casa: Tailscale' : u.total ? [u.artist, u.album].filter(Boolean).join(' · ') : 'MÚSICA (abajo) o EJECT: las listas';
+  const hi = /FLAC|ALAC|WAV/.test(s.quality || ''), q = el('nowQ'); q.textContent = (hi ? 'HI-FI · ' : '') + (s.quality || ''); q.classList.toggle('hifi', hi);
+}
 function usbNow(s, u) {
   el('nowBand').textContent = 'USB' + (u.discs ? ' · ' + u.disc + '/' + u.discs + ' · TEMA ' + u.n + '/' + u.total : '') + (u.rand ? ' · RAND' : '') + (u.rep ? ' · REP' : '') + (s.sleep > 0 ? ' · SLEEP ' + s.sleep + "'" : '');
   el('nowName').textContent = u.title || (u.picked ? u.root || 'USB' : 'USB');
@@ -297,12 +331,12 @@ function read() {
   const line = trouble || (!live ? '' : s.song && Math.floor(Date.now() / 4000) % 3 !== 2 ? s.song : s.station || '');
   // SLEEP: the minutes left take turns with the quality, in its corner of the display
   const corner = s.sleep > 0 && Math.floor(Date.now() / 4000) % 2 ? 'SLEEP ' + s.sleep : live ? s.quality || '' : '';
-  const u = s.mode === 'usb' && s.usb || s.mode === 'cd' && s.cd, usbOn = !!u && !greet;
+  const u = s.mode === 'usb' && s.usb || s.mode === 'cd' && s.cd || s.mode === 'server' && s.jf, usbOn = !!u && !greet;
   const radio = greet ? { band: '', frequency: greet, preset: s.slot || 1, live: false, name: '', mono: false, local: false, quality: '' }
     : extra
     ? { band: '', frequency: extra, preset: s.slot || 1, live, name: context(s), mono: !!s.mono, local: s.band === 'LOCAL' && !s.tuned, quality: corner }
     : { band: s.memo ? 'A.MEM' : s.tuned ? '' : s.band, frequency: s.freq || shortName(s.station).toUpperCase(), preset: s.slot || 1, live, name: line, mono: !!s.mono, local: s.band === 'LOCAL' && !s.tuned, quality: corner };
-  const track = usbOn ? (s.mode === 'cd' ? cdTrack(s, u, extra) : usbTrack(s, u, extra)) : null;
+  const track = usbOn ? (s.mode === 'cd' ? cdTrack(s, u, extra) : s.mode === 'server' ? jfTrack(s, u, extra) : usbTrack(s, u, extra)) : null;
   const key = JSON.stringify([track || radio, off, s.memories, s.scan, s.slot, s.band, s.mode]);
   face.classList.toggle('off', off);
   el('stereoView').classList.toggle('aux-on', live);
@@ -311,7 +345,7 @@ function read() {
   read.last = key;
   if (disp) { if (track) disp.setTrack(track); else dispRadio(radio); }
   padSync(s);
-  if (u) { if (s.mode === 'cd') cdNow(s, u); else usbNow(s, u); return; }
+  if (u) { if (s.mode === 'cd') cdNow(s, u); else if (s.mode === 'server') jfNow(s, u); else usbNow(s, u); return; }
   el('nowBand').textContent = (s.memo ? 'A.MEM · ' : '') + (s.tuned ? 'MUNDO' + (s.cc ? ' · ' + s.cc : '') : s.band + (s.town ? ' · ' + s.town.toUpperCase() : '') + ' · ' + s.slot + (s.freq ? ' · ' + s.freq : '')) + (s.scan ? ' · SCAN' : '') + (s.sleep > 0 ? ' · SLEEP ' + s.sleep + "'" : '');
   el('nowName').textContent = s.station || 'DECK 90';
   el('nowSong').textContent = trouble || s.song || '';
@@ -753,3 +787,113 @@ el('rfKeep').addEventListener('click', e => {
   app.key('keep' + b.dataset.m, true);
   setTimeout(read, 150);
 });
+
+// ═══ SERVER: the music lists (MÚSICA, or EJECT) and the sign-in. The app answers a list through faceJfList(req, …);
+// an older answer that arrives late is dropped. ◀ goes back through what was opened
+const jf = { stack: [], req: 0, view: null, timer: 0 };
+function jfShow(on) { el('jfBox').classList.toggle('show', on); if (!on) el('jfFind').blur(); }
+function jfServer() { try { return JSON.parse(app.jfServer ? app.jfServer() : '{}'); } catch (_) { return {}; } }
+function jfHome() {
+  jf.stack = []; el('jfFind').value = '';
+  const j = view.jf || {}, who = jfServer();
+  jfView({ kind: 'home', title: 'MÚSICA' + (who.name ? ' · ' + who.name.toUpperCase() : '') });
+  jfRender([
+    { t: 'go', k: 'shuffle', name: 'AL AZAR', sub: '100 temas de toda la biblioteca' },
+    { t: 'nav', k: 'recent', name: 'RECIENTES', sub: 'Los discos que entraron último' },
+    { t: 'nav', k: 'albums', name: 'DISCOS', sub: j.albums ? j.albums + ' discos' : '' },
+    { t: 'nav', k: 'artists', name: 'ARTISTAS', sub: j.artists ? j.artists + ' artistas' : '' },
+    { t: 'nav', k: 'queue', name: 'LO QUE SUENA', sub: j.total ? j.total + ' temas' : '' },
+    { t: 'nav', k: 'login', name: 'SERVIDOR', sub: who.server || '' },
+  ], j.reading ? 'Leyendo la biblioteca…' : '');
+}
+function jfView(v, push) {
+  if (push && jf.view) jf.stack.push(jf.view);
+  jf.view = v; el('jfTitle').textContent = v.title; el('jfBack').style.visibility = jf.stack.length ? 'visible' : 'hidden';
+  if (v.kind === 'home') return;
+  el('jfMsg').textContent = v.kind === 'search' ? 'Buscando…' : 'Cargando…'; el('jfList').replaceChildren();
+  const r = ++jf.req;
+  if (app.jfList) app.jfList(r, v.kind, v.id || '', v.text || '');
+}
+window.faceJfList = (req, o) => {
+  if (req !== jf.req || !jf.view) return;
+  const items = o.items || [];
+  if (o.title && jf.view.kind !== 'search') { jf.view.title = o.title.toUpperCase(); el('jfTitle').textContent = jf.view.title; }
+  const what = { albums: 'discos', artists: 'artistas', artist: 'discos', album: 'temas', recent: 'discos', queue: 'temas', search: 'resultados' }[o.kind] || '';
+  jfRender(items, o.error === 'signed out' ? 'El servidor ya no te reconoce: SERVIDOR para entrar de nuevo'
+    : o.error && !items.length ? '⚠ No contesta el servidor: ' + o.error : items.length ? items.length + ' ' + what : o.kind === 'search' ? 'No encontré nada' : 'No hay nada acá');
+};
+function jfRender(items, msg) {
+  el('jfMsg').textContent = msg || '';
+  const now = view.jf && view.jf.title;
+  el('jfList').replaceChildren(...items.map(it => {
+    const b = document.createElement('button'); b.type = 'button';
+    b.className = 'rf-item' + (it.t === 'nav' || it.t === 'go' || it.t === 'artist' || it.t === 'album' ? ' nav' : '') + ((it.t === 'song' || it.t === 'found') && it.name === now ? ' on' : '');
+    Object.assign(b.dataset, { t: it.t, id: it.id || '', k: it.k || '', i: it.i != null ? it.i : '', name: it.name || '' });
+    const name = document.createElement('b'); name.textContent = (it.t === 'song' && it.n ? String(it.n).padStart(2, '0') + '  ' : '') + it.name;
+    const sub = document.createElement('small'); sub.textContent = it.sub || '';
+    const side = document.createElement('i');
+    side.textContent = it.t === 'song' || it.t === 'found' ? (it.q ? it.q + ' · ' : '') + (it.len ? Math.floor(it.len / 60) + ':' + String(it.len % 60).padStart(2, '0') : '') : it.t === 'go' ? '▶' : '›';
+    if (/FLAC|ALAC|WAV/.test(it.q || '')) side.classList.add('hifi');
+    b.append(name, sub, side); return b;
+  }));
+  const on = el('jfList').querySelector('.on'); if (on) on.scrollIntoView({ block: 'center' });
+}
+el('jfList').addEventListener('click', e => {
+  const b = e.target.closest('.rf-item'); if (!b) return;
+  const d = b.dataset, v = jf.view || {};
+  if (d.t === 'go') { app.jfPlay && app.jfPlay(d.k, '', 0); jfShow(false); return; }
+  if (d.t === 'nav') {
+    if (d.k === 'login') { jfShow(false); return faceJf('login'); }
+    return jfView({ kind: d.k, title: d.name }, true);
+  }
+  if (d.t === 'artist') return jfView({ kind: 'artist', id: d.id, title: d.name.toUpperCase() }, true);
+  if (d.t === 'album') return jfView({ kind: 'album', id: d.id, title: d.name.toUpperCase() }, true);
+  if (d.t === 'song' && app.jfPlay) app.jfPlay(v.kind === 'queue' ? 'queue' : 'album', v.id || '', Number(d.i) || 0);
+  if (d.t === 'found' && app.jfPlay) app.jfPlay('found', d.id, 0);
+  setTimeout(read, 400); jfShow(false);
+});
+el('jfBack').addEventListener('click', () => { const v = jf.stack.pop(); if (!v) return; if (v.kind === 'home') return jfHome(); jfView(v); });
+el('jfClose').addEventListener('click', () => jfShow(false));
+// any words, as they're typed: artists and albums from what's kept, songs from the server
+el('jfFind').addEventListener('input', () => {
+  clearTimeout(jf.timer);
+  const text = el('jfFind').value.trim();
+  jf.timer = setTimeout(() => {
+    if (text.length < 2) { if (jf.view && jf.view.kind === 'search') jfHome(); return; }
+    jfView({ kind: 'search', text, title: 'BUSCAR' }, !(jf.view && jf.view.kind === 'search'));
+  }, 450);
+});
+el('jfFind').addEventListener('keydown', e => { if (e.key === 'Enter') el('jfFind').blur(); });
+
+function jfLoginOpen() {
+  const who = jfServer();
+  el('jfAddr').value = who.server ? who.server.replace(/^http:\/\//, '') : el('jfAddr').value;
+  el('jfPw').value = '';
+  el('jfLoginMsg').textContent = who.signedIn ? 'Conectado como ' + who.name + '. Para cambiar, entrá de nuevo.' : '';
+  el('jfOut').style.display = who.signedIn ? '' : 'none';
+  el('jfLogin').classList.add('show');
+  setTimeout(() => (el('jfAddr').value ? el(el('jfUser').value ? 'jfPw' : 'jfUser') : el('jfAddr')).focus(), 60);
+}
+el('jfGo').addEventListener('click', () => {
+  const addr = el('jfAddr').value.trim(), user = el('jfUser').value.trim(), pw = el('jfPw').value;
+  if (!addr || !user) { el('jfLoginMsg').textContent = 'Falta la dirección del servidor o el usuario'; return; }
+  if (!app.jfSignIn) { el('jfLoginMsg').textContent = '⚠ Entrar anda en la app'; return; }
+  el('jfLoginMsg').textContent = 'Entrando…'; el('jfGo').disabled = true;
+  app.jfSignIn(addr, user, pw); el('jfPw').value = '';
+});
+el('jfPw').addEventListener('keydown', e => { if (e.key === 'Enter') el('jfGo').click(); });
+el('jfLoginClose').addEventListener('click', () => el('jfLogin').classList.remove('show'));
+el('jfOut').addEventListener('click', () => { app.jfSignOut && app.jfSignOut(); el('jfLogin').classList.remove('show'); toast('SERVER · saliste del servidor'); });
+
+// what the app asks of the face: the sign-in, the lists, the sign-in's answer
+window.faceJf = (what, data) => {
+  if (what === 'login') return jfLoginOpen();
+  if (what === 'browse') { if (!jfServer().signedIn && app.jfServer) return jfLoginOpen(); jfShow(true); return jfHome(); }
+  if (what === 'signed') {
+    el('jfGo').disabled = false;
+    if (data && data.error) { el('jfLoginMsg').textContent = data.error; return; }
+    el('jfLogin').classList.remove('show');
+    toast('SERVER · hola ' + (data && data.name || '') + (data && data.albums ? ' · ' + data.albums + ' discos' : ''));
+    jfShow(true); jfHome();
+  }
+};

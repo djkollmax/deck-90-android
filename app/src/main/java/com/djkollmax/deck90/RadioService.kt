@@ -61,6 +61,7 @@ class RadioService : MediaLibraryService() {
         BuildConfigInfo.version = runCatching { packageManager.getPackageInfo(packageName, 0).versionName ?: "0" }.getOrDefault("0")
         store = Store(this)
         Usb.load(this)
+        Jf.load(this)
         val http = DefaultHttpDataSource.Factory().setUserAgent("Deck90-Android/" + BuildConfigInfo.version)
             .setAllowCrossProtocolRedirects(true).setConnectTimeoutMs(10_000).setReadTimeoutMs(15_000)
         val data = ResolvingDataSource.Factory(CdOrDefault.Factory(DefaultDataSource.Factory(this, http)), Resolver(store))   // the CD's own (Cd.kt)
@@ -75,7 +76,9 @@ class RadioService : MediaLibraryService() {
             override fun onMediaItemTransition(item: MediaItem?, reason: Int) {
                 val usb = Usb.parse(item?.mediaId)
                 val cd = Cd.parse(item?.mediaId)
-                if (cd != null) { store.mode = "cd"; store.cdTrack = cd }
+                val jf = Jf.parse(item?.mediaId)
+                if (jf != null) { store.mode = "server"; store.jfIndex = player.currentMediaItemIndex; store.jfPos = 0 }
+                else if (cd != null) { store.mode = "cd"; store.cdTrack = cd }
                 else if (usb != null) { store.mode = "usb"; store.usbDisc = usb.first; store.usbTrack = usb.second; store.usbPos = 0 }
                 else if (item?.mediaId == Store.TUNED) { store.mode = "radio"; store.onTuned = true }
                 else Store.parse(item?.mediaId)?.let { (b, s) -> store.mode = "radio"; store.band = b; store.slot = s; store.onTuned = false }
@@ -102,6 +105,7 @@ class RadioService : MediaLibraryService() {
             }
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 if (!isPlaying && Usb.parse(player.currentMediaItem?.mediaId) != null) store.usbPos = player.currentPosition   // the car comes back here
+                if (!isPlaying && Jf.parse(player.currentMediaItem?.mediaId) != null) { store.jfIndex = player.currentMediaItemIndex; store.jfPos = player.currentPosition }
                 Now.changed()
             }
             override fun onPlayerError(error: PlaybackException) {
@@ -109,6 +113,7 @@ class RadioService : MediaLibraryService() {
                 val item = player.currentMediaItem ?: return
                 if (Usb.parse(item.mediaId) != null) { Now.error = "NO USB"; Now.changed(); return }   // the pendrive is out
                 if (item.localConfiguration?.uri?.scheme == "cdda") { Now.error = "NO DISC"; Now.changed(); return }   // the drive or the disc
+                if (Jf.parse(item.mediaId) != null) { Now.error = if (Jf.signedIn) "NO SERVER" else "SIGN IN"; Now.changed(); return }   // Jellyfin didn't answer
                 val st = (if (item.mediaId == Store.TUNED) store.tuned else Store.parse(item.mediaId)?.let { (b, s) -> store.station(b, s) }) ?: return
                 store.resolvedSet(st, null)
                 if (retried != item.mediaId) { retried = item.mediaId; Resolver.fail(st); player.prepare(); player.play() }
@@ -145,7 +150,9 @@ class RadioService : MediaLibraryService() {
             val list = when {
                 parentId == "root" -> Bands.order.map { folder("band:$it", "RADIO " + Bands.label(it)) } + folder("band:${Bands.LOCAL}", "RADIOS LOCALES") +
                     (if (Usb.discs.isNotEmpty()) listOf(folder("usb", "USB · " + Usb.rootName.ifEmpty { "MÚSICA" })) else emptyList()) +
-                    (if (Cd.count() > 0) listOf(folder("cd", "CD · " + (Cd.names?.album?.ifEmpty { null } ?: if (Cd.status == "files") "MP3" else "AUDIO"))) else emptyList())
+                    (if (Cd.count() > 0) listOf(folder("cd", "CD · " + (Cd.names?.album?.ifEmpty { null } ?: if (Cd.status == "files") "MP3" else "AUDIO"))) else emptyList()) +
+                    (if (Jf.signedIn) listOf(folder("jf", "SERVER · MÚSICA")) else emptyList())
+                parentId == "jf" || parentId.startsWith("jf") -> return server(parentId, params)
                 parentId == "cd" -> Cd.playlist(1).first
                 parentId == "usb" -> (1..Usb.discs.size).mapNotNull { Usb.discItem(it) }
                 parentId.startsWith("usbdisc:") -> parentId.removePrefix("usbdisc:").toIntOrNull()?.let { d -> Usb.playlist(d, 1).first } ?: emptyList()
@@ -154,6 +161,45 @@ class RadioService : MediaLibraryService() {
                 else -> emptyList()
             }
             return Futures.immediateFuture(LibraryResult.ofItemList(ImmutableList.copyOf(list), params))
+        }
+
+        // SERVER in the car (Jellyfin.kt): AL AZAR, RECIENTES, DISCOS and ARTISTAS by letter, an artist's albums, an
+        // album's songs. What needs the server is asked off the main thread
+        private fun server(id: String, params: LibraryParams?): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> =
+            background.submit<LibraryResult<ImmutableList<MediaItem>>> {
+                val playable = { mid: String, title: String -> MediaItem.Builder().setMediaId(mid).setMediaMetadata(MediaMetadata.Builder().setTitle(title)
+                    .setIsBrowsable(false).setIsPlayable(true).setMediaType(MediaMetadata.MEDIA_TYPE_PLAYLIST).build()).build() }
+                val music = { mid: String, title: String -> MediaItem.Builder().setMediaId(mid).setMediaMetadata(MediaMetadata.Builder().setTitle(title)
+                    .setIsBrowsable(true).setIsPlayable(false).setMediaType(MediaMetadata.MEDIA_TYPE_FOLDER_MIXED).build()).build() }
+                Jf.read()
+                val list: List<MediaItem> = when {
+                    id == "jf" -> listOf(playable("jfshuffle", "AL AZAR"), music("jfrecent", "RECIENTES"), music("jfalbums", "DISCOS (${Jf.albums.size})"),
+                        music("jfartists", "ARTISTAS (${Jf.artists.size})"))
+                    id == "jfrecent" -> Jf.recent().map { Jf.albumItem(it) }
+                    id == "jfalbums" -> Jf.albums.groupBy { Jf.letter(it.name) }.toSortedMap(compareBy { if (it == "#") "~" else it }).map { (l, a) -> music("jfalbums:$l", "$l · ${a.size}") }
+                    id.startsWith("jfalbums:") -> id.removePrefix("jfalbums:").let { l -> Jf.albums.filter { Jf.letter(it.name) == l }.map { Jf.albumItem(it) } }
+                    id == "jfartists" -> Jf.artists.groupBy { Jf.letter(it.name) }.toSortedMap(compareBy { if (it == "#") "~" else it }).map { (l, a) -> music("jfartists:$l", "$l · ${a.size}") }
+                    id.startsWith("jfartists:") -> id.removePrefix("jfartists:").let { l -> Jf.artists.filter { Jf.letter(it.name) == l }.map { Jf.artistItem(it) } }
+                    id.startsWith("jfartist:") -> Jf.albumsOf(id.removePrefix("jfartist:")).map { Jf.albumItem(it) }
+                    id.startsWith("jfalbum:") -> id.removePrefix("jfalbum:").let { a -> Jf.songsOf(a).map { Jf.item(it, "album:$a") } }
+                    else -> emptyList()
+                }
+                LibraryResult.ofItemList(ImmutableList.copyOf(list), params)
+            }
+
+        // a SERVER song asked for alone (by the car): its album from there; AL AZAR: 100 at random. Kept for resumption
+        private fun serverQueue(id: String): ListenableFuture<MediaSession.MediaItemsWithStartPosition> = background.submit<MediaSession.MediaItemsWithStartPosition> {
+            val songs: List<JfSong>; var at = 0
+            if (id == "jfshuffle") songs = Jf.shuffle()
+            else {
+                val s = Jf.song(Jf.parse(id) ?: "")
+                val album = s?.albumId.orEmpty()
+                val all = if (album.isNotEmpty()) Jf.songsOf(album) else emptyList()
+                songs = all.ifEmpty { listOfNotNull(s) }
+                at = songs.indexOfFirst { "jf:" + it.id == id }.coerceAtLeast(0)
+            }
+            store.jfQueue = Jf.queueJson(songs); store.jfIndex = at; store.jfPos = 0; store.mode = "server"; Now.error = ""
+            MediaSession.MediaItemsWithStartPosition(songs.map { Jf.item(it) }, at, C.TIME_UNSET)
         }
 
         // LOCALES in the car: found again where the phone is now, when it has moved or the list is old (a few seconds,
@@ -177,6 +223,7 @@ class RadioService : MediaLibraryService() {
         // a memory asked for (by the car or the phone, with only its id): its whole band, starting there
         override fun onSetMediaItems(mediaSession: MediaSession, controller: MediaSession.ControllerInfo, mediaItems: MutableList<MediaItem>, startIndex: Int, startPositionMs: Long): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
             val askedId = mediaItems.getOrNull(if (startIndex == C.INDEX_UNSET) 0 else startIndex)?.mediaId
+            if (mediaItems.size <= 1 && (askedId == "jfshuffle" || Jf.parse(askedId) != null)) return serverQueue(askedId!!)
             Cd.parse(askedId)?.let { n -> if (mediaItems.size <= 1) { val (items, at) = Cd.playlist(n); Now.error = ""
                 return Futures.immediateFuture(MediaSession.MediaItemsWithStartPosition(items, at, C.TIME_UNSET)) } }
             val song = Usb.parse(askedId)
@@ -201,6 +248,10 @@ class RadioService : MediaLibraryService() {
 
         // the car starts (or "play" on the headphones): the last station heard
         override fun onPlaybackResumption(mediaSession: MediaSession, controller: MediaSession.ControllerInfo): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
+            if (store.mode == "server" && Jf.signedIn) {
+                val q = Jf.queueFrom(store.jfQueue)
+                if (q.isNotEmpty()) return Futures.immediateFuture(MediaSession.MediaItemsWithStartPosition(q.map { Jf.item(it) }, store.jfIndex.coerceIn(0, q.size - 1), store.jfPos))
+            }
             if (store.mode == "cd" && Cd.item(store.cdTrack) != null) {
                 val (items, at) = Cd.playlist(store.cdTrack)
                 return Futures.immediateFuture(MediaSession.MediaItemsWithStartPosition(items, at, C.TIME_UNSET))
@@ -250,6 +301,7 @@ class Resolver(private val store: Store) : ResolvingDataSource.Resolver {
         val u = dataSpec.uri
         if (u.scheme != "deck90") return dataSpec
         if (u.host == "tuned") return dataSpec.withUri(Uri.parse(address(store.tuned ?: throw IOException("no tuned station"))))
+        if (u.host == "jf") return dataSpec.withUri(Uri.parse(Jf.stream(u.lastPathSegment ?: throw IOException("bad song"))))   // SERVER, with its token
         val parts = u.pathSegments
         val band = parts.getOrNull(0) ?: throw IOException("bad station")
         val slot = parts.getOrNull(1)?.toIntOrNull() ?: throw IOException("bad station")

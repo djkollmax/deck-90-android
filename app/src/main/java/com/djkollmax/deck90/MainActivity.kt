@@ -63,6 +63,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         store = Store(this)
         Usb.load(this)
+        Jf.load(this)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         WindowInsetsControllerCompat(window, window.decorView).apply {
@@ -137,12 +138,14 @@ class MainActivity : AppCompatActivity() {
         val usb = store.mode == "usb"
         state = JSONObject()
             .put("mode", store.mode).put("usb", if (usb) usbState(c) else JSONObject.NULL).put("cd", if (store.mode == "cd") cdState(c) else JSONObject.NULL)
+            .put("jf", if (store.mode == "server") jfState(c) else JSONObject.NULL)
             .put("band", Bands.label(band)).put("slot", slot).put("freq", st?.freq ?: "").put("tuned", tuned)
             .put("station", st?.name ?: "").put("song", Now.song).put("cc", st?.cc ?: "")
             .put("playing", playing).put("buffering", buffering).put("error", if (playing) "" else Now.error)
-            .put("mono", band == "AM" && !tuned).put("quality", if (store.mode == "cd" && Cd.status == "audio" && Cd.parse(c?.currentMediaItem?.mediaId) != null) "PCM 16/44.1" else quality(c))
+            .put("mono", band == "AM" && !tuned).put("quality", if (store.mode == "cd" && Cd.status == "audio" && Cd.parse(c?.currentMediaItem?.mediaId) != null) "PCM 16/44.1"
+                else if (store.mode == "server") Jf.quality(Jf.song(Jf.parse(c?.currentMediaItem?.mediaId) ?: "")) else quality(c))
             .put("memo", now < memo).put("scan", scanning).put("power", Now.power).put("greet", Now.greeting(now)).put("flash", flash).put("sleep", Sleep.left(now))
-            .put("memories", JSONArray(if (store.mode == "cd") Cd.numbers().take(Bands.SLOTS).map { Cd.title(it) } else if (usb) Usb.discs.getOrNull(store.usbDisc - 1)?.songs?.take(Bands.SLOTS)?.map { Usb.songName(it.name) } ?: emptyList<String>()
+            .put("memories", JSONArray(if (store.mode == "server") jfQueue(c).take(Bands.SLOTS).map { it.name } else if (store.mode == "cd") Cd.numbers().take(Bands.SLOTS).map { Cd.title(it) } else if (usb) Usb.discs.getOrNull(store.usbDisc - 1)?.songs?.take(Bands.SLOTS)?.map { Usb.songName(it.name) } ?: emptyList<String>()
                 else store.memories(band).map { it?.name ?: "" }))
             .put("keepBand", Bands.label(keepBand()))
             .put("town", if (band == Bands.LOCAL) store.localAt()?.optString("town") ?: "" else "")
@@ -204,11 +207,13 @@ class MainActivity : AppCompatActivity() {
         if (!Now.power && !(k == "pwr" && !hold || k == "sel" || k == "band" && !hold || Regex("^(m[1-6]|mem\\d{1,2}|band:.+)$").matches(k))) return
         // MODE: RADIO → USB → CD → RADIO (held: pick the pendrive); the CD's slot on the face: the CD
         val tap = { web.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP); refresh() }
-        if (k == "mode") { when { hold -> usbChoose(); store.mode == "usb" -> toCd(); store.mode == "cd" -> toRadio(); else -> toUsb() }; tap(); return }
+        // MODE: RADIO → USB → CD → SERVER → RADIO
+        if (k == "mode") { when { hold && store.mode == "server" -> jfFace("login"); hold -> usbChoose(); store.mode == "usb" -> toCd(); store.mode == "cd" -> toServer(); store.mode == "server" -> toRadio(); else -> toUsb() }; tap(); return }
         if (k == "mode:radio") { toRadio(); tap(); return }
         if (k == "slot" && store.mode != "cd") { toCd(); tap(); return }
         if (store.mode == "usb" && Now.power && usbKey(k, hold, c)) { tap(); return }
         if (store.mode == "cd" && Now.power && cdKey(k, hold, c)) { tap(); return }
+        if (store.mode == "server" && Now.power && serverKey(k, hold, c)) { tap(); return }
         when {
             k == "pwr" && hold -> {
                 val m = Sleep.step()
@@ -221,7 +226,7 @@ class MainActivity : AppCompatActivity() {
             k == "pwr" && Now.power -> { Sleep.cancel(); c?.pause(); Now.off("GOOD BYE") }
             k == "pwr" || !Now.power && (k == "band" || k == "sel") -> {   // on (BAND and SEL too): where it was, with HELLO
                 Now.on()
-                when { c != null && c.mediaItemCount > 0 -> { c.prepare(); c.play() }; store.mode == "usb" -> playUsb(store.usbDisc, store.usbTrack, store.usbPos); store.mode == "cd" -> toCd(); else -> tune(store.band, store.slot) }
+                when { c != null && c.mediaItemCount > 0 -> { c.prepare(); c.play() }; store.mode == "usb" -> playUsb(store.usbDisc, store.usbTrack, store.usbPos); store.mode == "cd" -> toCd(); store.mode == "server" -> toServer(); else -> tune(store.band, store.slot) }
             }
             k == "sel" -> when {
                 c == null -> {}
@@ -322,7 +327,8 @@ class MainActivity : AppCompatActivity() {
         store.mode = "radio"; c.shuffleModeEnabled = false; c.repeatMode = Player.REPEAT_MODE_OFF
     }
     private fun toRadio() {
-        controller?.let { c -> if (Usb.parse(c.currentMediaItem?.mediaId) != null) store.usbPos = c.currentPosition }
+        controller?.let { c -> if (Usb.parse(c.currentMediaItem?.mediaId) != null) store.usbPos = c.currentPosition
+            if (Jf.parse(c.currentMediaItem?.mediaId) != null) { store.jfIndex = c.currentMediaItemIndex; store.jfPos = c.currentPosition } }
         if (store.onTuned) store.tunedItem()?.let { item -> controller?.let { c -> radioMode(c); Now.on(); c.setMediaItem(item); c.prepare(); c.play() } }
         else tune(store.band, store.slot)
         toast("MODE · RADIO")
@@ -500,6 +506,123 @@ class MainActivity : AppCompatActivity() {
             .put("rand", store.usbRand).put("rep", store.usbRep)
     }
 
+    // ═══ SERVER: the person's Jellyfin music (Jellyfin.kt). MODE after the CD; not signed in, the face asks for the
+    // server, user and password (MODE held asks again). On SERVER: SEL, ◀◀ ▶▶, 1–6 (held 7–12) the songs playing,
+    // BAND the next album (held: the one before), SCAN RAND, LOC REP, EJECT (or MÚSICA on the big keys) the lists
+    private fun jfFace(what: String, data: String = "null") = main.post { web.evaluateJavascript("window.faceJf&&faceJf(${JSONObject.quote(what)},$data)", null) }
+    private fun toServer() {
+        controller?.let { c -> if (Usb.parse(c.currentMediaItem?.mediaId) != null) store.usbPos = c.currentPosition }
+        store.mode = "server"; Now.error = ""
+        if (!Jf.signedIn) { controller?.pause(); toast("MODE · SERVER · tu música de Jellyfin: poné el servidor, el usuario y la contraseña"); jfFace("login"); refresh(); return }
+        Thread { Jf.read() }.start()
+        val q = Jf.queueFrom(store.jfQueue)
+        if (q.isNotEmpty()) { playServer(q, store.jfIndex, store.jfPos); toast("MODE · SERVER · " + Jf.name) }
+        else { controller?.pause(); toast("MODE · SERVER · elegí qué escuchar"); jfFace("browse") }
+        refresh()
+    }
+    private fun jfQueue(c: MediaController?): List<JfSong> {
+        if (c == null || Jf.parse(c.currentMediaItem?.mediaId) == null) return Jf.queueFrom(store.jfQueue)
+        return (0 until c.mediaItemCount).mapNotNull { Jf.parse(c.getMediaItemAt(it).mediaId)?.let { id -> Jf.song(id) } }
+    }
+    private fun playServer(songs: List<JfSong>, at: Int, pos: Long = 0) {
+        val c = controller ?: return
+        if (songs.isEmpty()) return
+        val i = at.coerceIn(0, songs.size - 1)
+        store.mode = "server"; store.jfQueue = Jf.queueJson(songs); store.jfIndex = i; store.jfPos = pos
+        scanning = false; main.removeCallbacks(scan); Now.on(); Now.error = ""; Now.song = ""
+        c.shuffleModeEnabled = store.usbRand; c.repeatMode = arrayOf(Player.REPEAT_MODE_OFF, Player.REPEAT_MODE_ALL, Player.REPEAT_MODE_ONE)[store.usbRep]
+        c.setMediaItems(songs.map { Jf.item(it) }, i, pos); c.prepare(); c.play(); refresh()
+    }
+    // the next album (or the one before) in the library's order, from its first song
+    private fun jfAlbumStep(back: Boolean) {
+        val now = jfQueue(controller).getOrNull(controller?.currentMediaItemIndex ?: 0)?.albumId ?: ""
+        Thread {
+            Jf.read()
+            val all = Jf.albums
+            if (all.isEmpty()) return@Thread
+            val i = all.indexOfFirst { it.id == now }
+            val next = all[if (i < 0) 0 else (i + (if (back) -1 else 1) + all.size) % all.size]
+            val songs = Jf.songsOf(next.id)
+            main.post { if (songs.isNotEmpty()) { playServer(songs, 0); toast("ALBUM · " + next.name + (if (next.artist.isNotEmpty()) " · " + next.artist else "")) } }
+        }.start()
+    }
+    private fun serverKey(k: String, hold: Boolean, c: MediaController?): Boolean {
+        val here = Jf.parse(c?.currentMediaItem?.mediaId) != null
+        val q = jfQueue(c)
+        when {
+            !Jf.signedIn && k in setOf("sel", "next", "prev", "band", "eject", "slot") -> jfFace("login")
+            k == "eject" || k == "slot" || k == "jfbrowse" -> jfFace("browse")
+            k == "sel" -> when { c == null -> {}; c.isPlaying -> c.pause(); here -> c.play(); q.isNotEmpty() -> playServer(q, store.jfIndex, store.jfPos); else -> jfFace("browse") }
+            k == "next" -> if (here && c != null) { if (c.hasNextMediaItem()) c.seekToNextMediaItem() else c.seekTo(0, 0); c.play() } else if (q.isNotEmpty()) playServer(q, 0)
+            k == "prev" -> if (here && c != null) { c.seekToPrevious(); c.play() } else if (q.isNotEmpty()) playServer(q, 0)
+            Regex("^m[1-6]$").matches(k) || Regex("^mem(\\d{1,3})$").matches(k) -> {
+                val n = if (k.startsWith("mem")) k.removePrefix("mem").toInt() else k[1].digitToInt() + if (hold) 6 else 0
+                if (n in 1..q.size) { if (here && c != null) { c.seekTo(n - 1, 0); c.play() } else playServer(q, n - 1); toast("TRACK · " + n.toString().padStart(2, '0') + " · " + q[n - 1].name) }
+                else toast(if (q.isEmpty()) "SERVER · elegí un disco con MÚSICA" else "Suenan ${q.size} temas")
+            }
+            k == "band" -> jfAlbumStep(hold)
+            k == "scan" -> { store.usbRand = !store.usbRand; c?.shuffleModeEnabled = store.usbRand; toast(if (store.usbRand) "RAND · los temas al azar" else "RAND · en orden") }
+            k == "loc" -> {
+                store.usbRep = (store.usbRep + 1) % 3
+                c?.repeatMode = arrayOf(Player.REPEAT_MODE_OFF, Player.REPEAT_MODE_ALL, Player.REPEAT_MODE_ONE)[store.usbRep]
+                toast(arrayOf("REP · sin repetir", "REP · repite el disco", "REP · repite el tema")[store.usbRep])
+            }
+            k.startsWith("keep") -> toast("SERVER · los números guardan radios: MODE para volver a la radio")
+            else -> return false
+        }
+        return true
+    }
+    private fun jfState(c: MediaController?): JSONObject {
+        val q = jfQueue(c); val here = Jf.parse(c?.currentMediaItem?.mediaId) != null
+        val i = if (here) c!!.currentMediaItemIndex else store.jfIndex
+        val s = q.getOrNull(i)
+        val len = c?.duration?.takeIf { here && it > 0 } ?: ((s?.len ?: 0) * 1000L)
+        return JSONObject().put("signedIn", Jf.signedIn).put("server", Jf.server).put("name", Jf.name).put("reading", Jf.reading)
+            .put("albums", Jf.albums.size).put("artists", Jf.artists.size).put("error", Jf.error)
+            .put("n", if (s != null) i + 1 else 0).put("total", q.size).put("track", s?.n ?: 0)
+            .put("title", s?.name ?: "").put("artist", s?.artist ?: "").put("album", s?.album ?: "").put("albumId", s?.albumId ?: "")
+            .put("len", len / 1000.0).put("pos", (if (here) c!!.currentPosition else store.jfPos) / 1000.0)
+            .put("rand", store.usbRand).put("rep", store.usbRep)
+    }
+    // the face's lists (its MÚSICA window): what's asked, answered later through faceJfList(req, …)
+    private fun jfList(req: Int, kind: String, id: String, text: String) = Thread {
+        val o = JSONObject().put("kind", kind).put("id", id)
+        val album = { a: JfAlbum -> JSONObject().put("t", "album").put("id", a.id).put("name", a.name).put("sub", listOf(a.artist, if (a.year > 0) a.year.toString() else "").filter { it.isNotEmpty() }.joinToString(" · ")) }
+        val song = { x: JfSong, i: Int -> JSONObject().put("t", "song").put("id", x.id).put("i", i).put("name", x.name).put("sub", listOf(x.artist, x.album).filter { it.isNotEmpty() }.joinToString(" · "))
+            .put("n", x.n).put("len", x.len).put("q", Jf.quality(x)) }
+        try {
+            if (kind != "home" && kind != "search") Jf.read()
+            val items: List<JSONObject> = when (kind) {
+                "home" -> { Jf.read(); emptyList() }
+                "albums" -> Jf.albums.map(album)
+                "artists" -> Jf.artists.map { JSONObject().put("t", "artist").put("id", it.id).put("name", it.name) }
+                "artist" -> Jf.albumsOf(id).map(album).also { o.put("title", Jf.artists.firstOrNull { a -> a.id == id }?.name ?: "") }
+                "album" -> Jf.songsOf(id).mapIndexed { i, x -> song(x, i) }.also { o.put("title", Jf.albums.firstOrNull { a -> a.id == id }?.name ?: Jf.songsOf(id).firstOrNull()?.album ?: "") }
+                "recent" -> Jf.recent().map(album)
+                "queue" -> jfQueueNow().mapIndexed { i, x -> song(x, i) }
+                "search" -> { Jf.read(); val (ar, al, so) = Jf.search(text)
+                    ar.map { JSONObject().put("t", "artist").put("id", it.id).put("name", it.name) } + al.map(album) + so.mapIndexed { i, x -> song(x, i).put("t", "found") } }
+                else -> emptyList()
+            }
+            o.put("items", JSONArray(items)).put("albums", Jf.albums.size).put("artists", Jf.artists.size).put("error", Jf.error)
+        } catch (e: Exception) { o.put("items", JSONArray()).put("error", e.message ?: "error") }
+        main.post { web.evaluateJavascript("window.faceJfList&&faceJfList($req,$o)", null) }
+    }.start()
+    private fun jfQueueNow(): List<JfSong> = jfQueue(controller)
+    // what's touched in the lists plays: an album from a song, a found song alone with the others found, AL AZAR
+    private fun jfPlay(kind: String, id: String, index: Int) = Thread {
+        val songs: List<JfSong>; var at = index
+        when (kind) {
+            "album" -> songs = Jf.songsOf(id)
+            "shuffle" -> { songs = Jf.shuffle(); at = 0 }
+            "artist" -> { songs = Jf.albumsOf(id).flatMap { Jf.songsOf(it.id) }.take(500); at = 0 }
+            "found" -> { val s = Jf.song(id); songs = if (s != null && s.albumId.isNotEmpty()) Jf.songsOf(s.albumId) else listOfNotNull(s); at = songs.indexOfFirst { it.id == id }.coerceAtLeast(0) }
+            "queue" -> { main.post { controller?.let { c -> if (index < c.mediaItemCount) { c.seekTo(index, 0); c.play() } } }; return@Thread }
+            else -> return@Thread
+        }
+        main.post { if (songs.isEmpty()) toast("SERVER · " + (Jf.error.ifEmpty { "no hay temas" })) else playServer(songs, at) }
+    }.start()
+
     // the face's list of discs (the pad's CARPETAS)
     private fun discsJson(): String = JSONArray(Usb.discs.mapIndexed { i, d -> JSONObject().put("d", i + 1).put("name", d.name).put("songs", d.songs.size) }).toString()
 
@@ -613,6 +736,16 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface fun key(k: String, hold: Boolean) { main.post { this@MainActivity.key(k, hold) } }
         @JavascriptInterface fun version(): String = BuildConfigInfo.version
         @JavascriptInterface fun discs(): String = discsJson()
+        // SERVER (Jellyfin): sign in (the password goes to the server and is forgotten: the token is kept), the lists, play
+        @JavascriptInterface fun jfSignIn(server: String, user: String, pw: String) {
+            Thread { val err = Jf.signIn(server, user, pw); if (err.isEmpty()) Jf.read(force = true)
+                jfFace("signed", JSONObject().put("error", err).put("name", Jf.name).put("albums", Jf.albums.size).toString())
+                main.post { refresh() } }.start()
+        }
+        @JavascriptInterface fun jfSignOut() { Thread { Jf.signOut(); main.post { controller?.let { c -> if (Jf.parse(c.currentMediaItem?.mediaId) != null) c.stop() }; store.jfQueue = "[]"; refresh() } }.start() }
+        @JavascriptInterface fun jfList(req: Int, kind: String, id: String, text: String) { this@MainActivity.jfList(req, kind, id, text) }
+        @JavascriptInterface fun jfPlay(kind: String, id: String, index: Int) { this@MainActivity.jfPlay(kind, id, index) }
+        @JavascriptInterface fun jfServer(): String = JSONObject().put("server", Jf.server.ifEmpty { "" }).put("name", Jf.name).put("signedIn", Jf.signedIn).toString()
         // the answer comes back as faceFound(list), or faceFound(null) when Radio Browser didn't answer
         @JavascriptInterface fun search(q: String, cc: String) {
             Thread {

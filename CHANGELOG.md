@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.9
+
+- SERVER mode (Jellyfin.kt), as deck-90's DM-90 (electron/jellyfin.js): sign-in by user and password
+  (/Users/AuthenticateByName); the token is kept in the app's private settings, never the password. Music libraries
+  only, read in pages of 2,000 without images and cached (jellyfin-library.json, 6 h). Songs play from
+  deck90://jf/<id>, which RadioService.Resolver turns into /Audio/<id>/universal with the token, so the token never
+  reaches the car or the notification; the server sends the file as it is or FLAC when the phone can't play it.
+- MODE: RADIO → USB → CD → SERVER. Keys as on USB; BAND steps albums in the library's order. The queue, its index
+  and position are kept for the car's resumption (Store.jfQueue).
+- The face: a sign-in sheet and a MÚSICA window (AL AZAR, RECIENTES, DISCOS, ARTISTAS, LO QUE SUENA, SERVIDOR, live
+  search), the display's source SRV, the big keys show the songs playing.
+- Android Auto: SERVER · MÚSICA with AL AZAR, RECIENTES, DISCOS and ARTISTAS by letter, an artist's albums, an
+  album's songs (asked off the main thread).
+
 ## 0.1.8
 
 - CD: a short packet ends a command's data stage (READ TOC answers fewer bytes than the 804 asked). Reading on took

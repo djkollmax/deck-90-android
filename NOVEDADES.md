@@ -1,5 +1,21 @@
 # Novedades
 
+## 0.1.9 — 2026-11-18
+
+### Nuevo
+- **SERVER: tu música de Jellyfin, como el DM-90 de la PC.** MODE pasa ahora de RADIO a USB, CD y **SERVER**. La
+  primera vez pide la dirección del servidor, el usuario y la contraseña; Deck 90 guarda el permiso que da Jellyfin,
+  nunca la contraseña.
+- **MÚSICA** (la tecla de arriba, o EJECT) abre las listas: **AL AZAR** (100 temas de toda la biblioteca),
+  **RECIENTES**, **DISCOS**, **ARTISTAS**, **LO QUE SUENA** y una búsqueda que encuentra artistas, discos y temas
+  mientras escribís.
+- Suena en la calidad del archivo (FLAC 24/96, MP3 320); lo que el celular no reproduce (ALAC, WMA) el servidor lo
+  manda como FLAC.
+- Las teclas como en USB: ◀◀ ▶▶ pasan de tema, 1 a 6 (y 7 a 12 manteniendo) van a un tema, **BAND** pasa al disco
+  siguiente (mantenida, al anterior), **SCAN** es RAND y **LOC** es REP.
+- **En Android Auto**, la carpeta **SERVER · MÚSICA**: al azar, recientes, discos y artistas por letra.
+- Fuera de casa anda con **Tailscale** prendido en el celular: poné como servidor la dirección de Tailscale de la PC.
+
 ## 0.1.8 — 2026-11-14
 
 ### Arreglos
