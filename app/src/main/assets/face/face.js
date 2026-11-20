@@ -869,6 +869,7 @@ function jfLoginOpen() {
   const who = jfServer();
   el('jfAddr').value = who.server ? who.server.replace(/^http:\/\//, '') : el('jfAddr').value;
   el('jfPw').value = '';
+  if (!el('jfUser').value && who.name) el('jfUser').value = who.name;   // 0.1.10: entering again, only the password
   el('jfLoginMsg').textContent = who.signedIn ? 'Conectado como ' + who.name + '. Para cambiar, entrá de nuevo.' : '';
   el('jfOut').style.display = who.signedIn ? '' : 'none';
   el('jfLogin').classList.add('show');

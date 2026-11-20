@@ -125,6 +125,8 @@ object Jf {
         save(); runCatching { cache().delete() }; Now.changed()
     }
 
+    // the server no longer takes the token (a song's address answered 401): sign in again
+    fun expired() = fail(Unauthorized())
     private fun fail(e: Exception) {
         error = if (e is Unauthorized) "signed out" else e.message ?: e.javaClass.simpleName
         if (e is Unauthorized) { token = ""; save() }                // the server no longer takes it: sign in again
@@ -229,7 +231,9 @@ object Jf {
     fun songsFrom(a: JSONArray): List<JfSong> = (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { i ->
         val src = i.optJSONArray("MediaSources")?.optJSONObject(0)
         val st = src?.optJSONArray("MediaStreams")?.let { s -> (0 until s.length()).mapNotNull { s.optJSONObject(it) }.firstOrNull { it.optString("Type") == "Audio" } }
-        JfSong(i.optString("Id"), i.optString("Name").ifEmpty { "UNTITLED" }, i.optString("AlbumArtist").ifEmpty { i.optJSONArray("Artists")?.optString(0).orEmpty() },
+        // 0.1.10: who sings it (a compilation's song said "Various Artists"), else the album's artist
+        val performers = i.optJSONArray("Artists")?.let { a -> (0 until a.length()).map { a.optString(it) }.filter { it.isNotBlank() } }.orEmpty()
+        JfSong(i.optString("Id"), i.optString("Name").ifEmpty { "UNTITLED" }, performers.joinToString(", ").ifEmpty { i.optString("AlbumArtist") },
             i.optString("Album"), i.optString("AlbumId"), i.optInt("IndexNumber"), i.optInt("ParentIndexNumber"), (i.optLong("RunTimeTicks") / 10_000_000L).toInt(),
             st?.optString("Codec").orEmpty().lowercase(), ((st?.optInt("BitRate") ?: 0).takeIf { it > 0 } ?: src?.optInt("Bitrate") ?: 0) / 1000,
             st?.optInt("SampleRate") ?: 0, st?.optInt("BitDepth") ?: 0)

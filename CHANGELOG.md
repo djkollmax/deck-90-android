@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.10
+
+- SERVER: a song's artist is its performers (Artists), the album artist only without them (a compilation said
+  "Various Artists"). A song the server answers with an error status is skipped (up to three in a row); a 401 signs
+  out (Jf.expired) and asks to sign in again; no answer at all is still NO SERVER.
+- The sign-in sheet keeps the user's name; MÚSICA's home reads the library again when it is older than 30 minutes.
+- Android backup (backup_rules.xml, data_rules.xml) leaves out the jellyfin preferences, so the token stays on the phone.
+
 ## 0.1.9
 
 - SERVER mode (Jellyfin.kt), as deck-90's DM-90 (electron/jellyfin.js): sign-in by user and password

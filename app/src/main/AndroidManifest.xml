@@ -14,6 +14,8 @@
     <!-- many stations still stream over plain http -->
     <application
         android:allowBackup="true"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="Deck 90"
         android:theme="@style/Theme.Deck90"

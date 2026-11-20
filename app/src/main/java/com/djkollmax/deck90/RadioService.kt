@@ -54,6 +54,7 @@ class RadioService : MediaLibraryService() {
     private lateinit var store: Store
     private lateinit var player: ExoPlayer
     private var session: MediaLibrarySession? = null
+    private var jfSkips = 0
     private var retried = ""                                         // the station already retried after an error
 
     override fun onCreate() {
@@ -104,6 +105,7 @@ class RadioService : MediaLibraryService() {
                 }
             }
             override fun onIsPlayingChanged(isPlaying: Boolean) {
+                if (isPlaying) jfSkips = 0
                 if (!isPlaying && Usb.parse(player.currentMediaItem?.mediaId) != null) store.usbPos = player.currentPosition   // the car comes back here
                 if (!isPlaying && Jf.parse(player.currentMediaItem?.mediaId) != null) { store.jfIndex = player.currentMediaItemIndex; store.jfPos = player.currentPosition }
                 Now.changed()
@@ -113,7 +115,17 @@ class RadioService : MediaLibraryService() {
                 val item = player.currentMediaItem ?: return
                 if (Usb.parse(item.mediaId) != null) { Now.error = "NO USB"; Now.changed(); return }   // the pendrive is out
                 if (item.localConfiguration?.uri?.scheme == "cdda") { Now.error = "NO DISC"; Now.changed(); return }   // the drive or the disc
-                if (Jf.parse(item.mediaId) != null) { Now.error = if (Jf.signedIn) "NO SERVER" else "SIGN IN"; Now.changed(); return }   // Jellyfin didn't answer
+                if (Jf.parse(item.mediaId) != null) {
+                    // 0.1.10: the server answered but not with the song (a file it can't read or convert): the next one, up
+                    // to three in a row; it answered 401: sign in again; it didn't answer at all: NO SERVER
+                    val http = generateSequence(error.cause) { it.cause }.filterIsInstance<androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException>().firstOrNull()
+                    when {
+                        http?.responseCode == 401 -> { Jf.expired(); Now.error = "SIGN IN" }
+                        http != null && jfSkips < 3 && player.hasNextMediaItem() -> { jfSkips++; Now.error = ""; player.seekToNextMediaItem(); player.prepare(); player.play() }
+                        else -> Now.error = if (Jf.signedIn) "NO SERVER" else "SIGN IN"
+                    }
+                    Now.changed(); return
+                }
                 val st = (if (item.mediaId == Store.TUNED) store.tuned else Store.parse(item.mediaId)?.let { (b, s) -> store.station(b, s) }) ?: return
                 store.resolvedSet(st, null)
                 if (retried != item.mediaId) { retried = item.mediaId; Resolver.fail(st); player.prepare(); player.play() }

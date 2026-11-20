@@ -593,7 +593,7 @@ class MainActivity : AppCompatActivity() {
         try {
             if (kind != "home" && kind != "search") Jf.read()
             val items: List<JSONObject> = when (kind) {
-                "home" -> { Jf.read(); emptyList() }
+                "home" -> { Jf.read(force = System.currentTimeMillis() - Jf.readAt > 30 * 60_000L); emptyList() }   // 0.1.10: what's new on the server, every half hour
                 "albums" -> Jf.albums.map(album)
                 "artists" -> Jf.artists.map { JSONObject().put("t", "artist").put("id", it.id).put("name", it.name) }
                 "artist" -> Jf.albumsOf(id).map(album).also { o.put("title", Jf.artists.firstOrNull { a -> a.id == id }?.name ?: "") }

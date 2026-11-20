@@ -1,5 +1,16 @@
 # Novedades
 
+## 0.1.10 — 2026-11-19
+
+### Arreglos en SERVER
+- Un tema de un compilado ahora dice **quién lo canta**, no "Various Artists".
+- Si el servidor no puede mandar un tema (un archivo dañado o que no puede convertir), **pasa al siguiente** en vez de
+  quedarse en NO SERVER. Si el servidor ya no te reconoce, pide entrar de nuevo.
+- Para entrar de nuevo ya está puesto tu usuario: solo falta la contraseña.
+- Los discos nuevos que agregás al servidor aparecen solos (la biblioteca se lee otra vez cada media hora al abrir
+  MÚSICA; antes tardaba hasta 6 horas).
+- La copia de seguridad de Android ya no guarda el permiso del servidor: en un celular nuevo se entra otra vez.
+
 ## 0.1.9 — 2026-11-18
 
 ### Nuevo

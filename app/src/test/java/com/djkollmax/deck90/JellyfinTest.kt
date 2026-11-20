@@ -30,6 +30,11 @@ class JellyfinTest {
         assertEquals(listOf("FLAC 24/44.1", "MP3 320", ""), s.map { Jf.quality(it) })
     }
 
+    @Test fun `a compilation's song says who sings it, not Various Artists`() {
+        val s = Jf.songsFrom(JSONArray("""[{"Id":"d4","Name":"Tema","AlbumArtist":"Various Artists","Artists":["Banda Uno","Invitada"],"AlbumId":"al3"}]"""))
+        assertEquals("Banda Uno, Invitada", s[0].artist)
+    }
+
     @Test fun `what plays is kept for the car and comes back the same`() {
         val s = Jf.songsFrom(JSONArray(answer))
         assertEquals(s, Jf.queueFrom(Jf.queueJson(s)))
