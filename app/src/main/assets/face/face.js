@@ -199,6 +199,23 @@ const BANDS = ['FM1', 'FM2', 'FM3', 'FM4', 'FM5', 'HI-FI', 'AM', 'LOCAL'];   // 
   });
   pad.addEventListener('contextmenu', e => e.preventDefault());
 })();
+// 0.1.11: the big number keys: twelve for the radio's memories; for a disc, a folder or the songs playing, one per song,
+// three rows showing and the rest a swipe below (the one playing comes into view)
+let padShown = 0;
+function padKeys(count) {
+  const box = el('padMems');
+  if (box.children.length !== count) {
+    const keep = [...box.children];
+    while (keep.length > count) keep.pop().remove();
+    for (let i = keep.length; i < count; i++) { const x = document.createElement('button'); x.dataset.m = i + 1; x.innerHTML = '<b>' + (i + 1) + '</b><small>—</small>'; box.append(x); }
+    padShown = 0;
+  }
+  box.classList.toggle('many', count > 12);
+  if (count > 12) {                                                   // three rows and the top of a fourth: there's more below
+    const gap = parseFloat(getComputedStyle(box).rowGap) || 6, h = Math.max(132, box.clientHeight);
+    box.style.gridAutoRows = Math.floor((h - 3 * gap) / 3.28) + 'px';
+  } else box.style.gridAutoRows = '';
+}
 const USB_PAD = [['discprev', '◀ CARPETA'], ['discs', 'CARPETAS'], ['discnext', 'CARPETA ▶'], ['mode:radio', 'RADIO']];
 const CD_PAD = [['eject', '⏏ EXPULSAR'], ['scan', 'RAND'], ['loc', 'REP'], ['mode:radio', 'RADIO']];
 const JF_PAD = [['jfbrowse', 'MÚSICA'], ['scan', 'RAND'], ['loc', 'REP'], ['mode:radio', 'RADIO']];
@@ -213,11 +230,14 @@ function padSync(s) {
   }
   if (usb) {
     const names = s.memories || [], n = (s.usb || s.cd || s.jf || {}).n || 0;
+    padKeys(Math.max(12, names.length));                              // 0.1.11: a key for every song, scrolling three rows at a time
     el('padMems').querySelectorAll('button').forEach((b, i) => {
       const x = names[i] || ''; b.querySelector('small').textContent = x || '—'; b.classList.toggle('empty', !x); b.classList.toggle('on', i + 1 === n);
     });
+    if (n && n !== padShown) { padShown = n; const b = el('padMems').children[n - 1]; if (b) b.scrollIntoView({ block: 'nearest' }); }
     return;
   }
+  padKeys(12);
   el('padBands').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.band === s.band));
   const names = s.memories || [];
   el('padMems').querySelectorAll('button').forEach((b, i) => {
@@ -328,7 +348,7 @@ function read() {
   view = s;
   // PWR (or SLEEP's end): GOOD BYE a moment, then the front goes dark; HELLO when it comes on
   const greet = s.greet || '', live = !!s.playing && !greet, extra = dispText(s), off = s.power === false && !greet;
-  const trouble = s.error ? 'NO SIGNAL' : s.buffering ? 'TUNING…' : '';
+  const trouble = s.error === 'RECONNECT' ? 'RECONNECTING…' : s.error ? 'NO SIGNAL' : s.buffering ? 'TUNING…' : '';
   const line = trouble || (!live ? '' : s.song && Math.floor(Date.now() / 4000) % 3 !== 2 ? s.song : s.station || '');
   // SLEEP: the minutes left take turns with the quality, in its corner of the display
   const corner = s.sleep > 0 && Math.floor(Date.now() / 4000) % 2 ? 'SLEEP ' + s.sleep : live ? s.quality || '' : '';

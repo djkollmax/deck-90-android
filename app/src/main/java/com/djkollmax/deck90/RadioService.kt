@@ -49,13 +49,20 @@ import java.io.IOException
 // ═══════════════════════════════════════
 @UnstableApi
 class RadioService : MediaLibraryService() {
-    private val background = MoreExecutors.listeningDecorator(Executors.newSingleThreadExecutor())   // LOCALES' lookups
+    // LOCALES' lookups and the server's lists: 0.1.11, three at once (one slow server no longer held the car's other lists)
+    private val background = MoreExecutors.listeningDecorator(Executors.newFixedThreadPool(3))
 
     private lateinit var store: Store
     private lateinit var player: ExoPlayer
     private var session: MediaLibrarySession? = null
     private var jfSkips = 0
     private var retried = ""                                         // the station already retried after an error
+    // 0.1.11: a radio that drops (the car between antennas, Wi-Fi to mobile) is tuned again by itself, longer and longer
+    // apart, as the PC's RECONECTANDO; playing well for a while, the count starts over
+    private var radioTries = 0
+    private var playingSince = 0L
+    private val main = Handler(android.os.Looper.getMainLooper())
+    private val RETRY_MS = longArrayOf(2_000, 4_000, 8_000, 15_000, 30_000, 60_000)
 
     override fun onCreate() {
         super.onCreate()
@@ -106,7 +113,7 @@ class RadioService : MediaLibraryService() {
                 }
             }
             override fun onIsPlayingChanged(isPlaying: Boolean) {
-                if (isPlaying) jfSkips = 0
+                if (isPlaying) { jfSkips = 0; playingSince = System.currentTimeMillis(); if (Now.error == "RECONNECT") Now.error = "" }
                 if (!isPlaying && Usb.parse(player.currentMediaItem?.mediaId) != null) store.usbPos = player.currentPosition   // the car comes back here
                 if (!isPlaying && Jf.parse(player.currentMediaItem?.mediaId) != null) { store.jfIndex = player.currentMediaItemIndex; store.jfPos = player.currentPosition }
                 Now.changed()
@@ -142,9 +149,15 @@ class RadioService : MediaLibraryService() {
                     Now.changed(); return
                 }
                 val st = (if (item.mediaId == Store.TUNED) store.tuned else Store.parse(item.mediaId)?.let { (b, s) -> store.station(b, s) }) ?: return
-                store.resolvedSet(st, null)
-                if (retried != item.mediaId) { retried = item.mediaId; Resolver.fail(st); player.prepare(); player.play() }
-                else { Now.error = "Sin señal"; Now.changed() }
+                // it had played well for half a minute: a new drop, not the same one
+                if (playingSince > 0 && System.currentTimeMillis() - playingSince > 30_000) { retried = ""; radioTries = 0 }
+                playingSince = 0
+                if (retried != item.mediaId) { retried = item.mediaId; radioTries = 0; store.resolvedSet(st, null); Resolver.fail(st); player.prepare(); player.play(); return }
+                if (radioTries < RETRY_MS.size) {
+                    val wait = RETRY_MS[radioTries++]; val id = item.mediaId
+                    Now.error = "RECONNECT"; Now.changed()
+                    main.postDelayed({ if (player.currentMediaItem?.mediaId == id && player.playerError != null && player.playWhenReady) { player.prepare(); player.play() } }, wait)
+                } else { Now.error = "Sin señal"; Now.changed() }
             }
         })
         session = MediaLibrarySession.Builder(this, player, Library()).build()
@@ -157,6 +170,7 @@ class RadioService : MediaLibraryService() {
     }
 
     override fun onDestroy() {
+        main.removeCallbacksAndMessages(null)
         Sleep.attach(null)
         background.shutdownNow()
         session?.run { player.release(); release() }

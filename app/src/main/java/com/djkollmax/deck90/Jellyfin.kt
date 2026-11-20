@@ -161,7 +161,8 @@ object Jf : MusicLib {
     override fun read(force: Boolean): Boolean {
         if (!signedIn) return false
         if (!force && albums.isNotEmpty() && System.currentTimeMillis() - readAt < 6 * 3600_000L) return true
-        if (reading) return albums.isNotEmpty()
+        // 0.1.11: being read already (MODE just asked for it): wait for that reading instead of answering an empty list
+        if (reading) { val t0 = System.currentTimeMillis(); while (reading && albums.isEmpty() && System.currentTimeMillis() - t0 < 60_000) Thread.sleep(100); return albums.isNotEmpty() }
         reading = true; Now.changed()
         try {
             val al = all("/Users/$user/Items", mapOf("IncludeItemTypes" to "MusicAlbum", "Recursive" to true, "SortBy" to "SortName", "Fields" to "AlbumArtist,ProductionYear"))

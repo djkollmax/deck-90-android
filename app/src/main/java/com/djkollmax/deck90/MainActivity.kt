@@ -151,12 +151,20 @@ class MainActivity : AppCompatActivity() {
             .put("mono", band == "AM" && !tuned).put("quality", if (store.mode == "cd" && Cd.status == "audio" && Cd.parse(c?.currentMediaItem?.mediaId) != null) "PCM 16/44.1"
                 else if (store.mode == "server") Jf.quality(Jf.song(Jf.parse(c?.currentMediaItem?.mediaId) ?: "")) else quality(c))
             .put("memo", now < memo).put("scan", scanning).put("power", Now.power).put("greet", Now.greeting(now)).put("flash", flash).put("sleep", Sleep.left(now))
-            .put("memories", JSONArray(if (store.mode == "server") jfQueue(c).take(Bands.SLOTS).map { it.name } else if (store.mode == "cd") Cd.numbers().take(Bands.SLOTS).map { Cd.title(it) } else if (usb) Usb.discs.getOrNull(store.usbDisc - 1)?.songs?.take(Bands.SLOTS)?.map { Usb.songName(it.name) } ?: emptyList<String>()
+            // 0.1.11: every song of the disc, folder or queue (the big keys scroll), not only the first twelve
+            .put("memories", JSONArray(if (store.mode == "server") jfQueue(c).take(MAX_KEYS).map { it.name } else if (store.mode == "cd") Cd.numbers().take(MAX_KEYS).map { Cd.title(it) } else if (usb) usbSongs(c) ?: emptyList<String>()
                 else store.memories(band).map { it?.name ?: "" }))
             .put("keepBand", Bands.label(keepBand()))
             .put("town", if (band == Bands.LOCAL) store.localAt()?.optString("town") ?: "" else "")
             .put("wx", wx ?: JSONObject.NULL)
             .toString()
+    }
+
+    private val MAX_KEYS = 999
+    // the folder playing's songs, for the big keys (the disc the player is on, else the one kept)
+    private fun usbSongs(c: MediaController?): List<String>? {
+        val d = Usb.parse(c?.currentMediaItem?.mediaId)?.first ?: store.usbDisc
+        return Usb.discs.getOrNull(d - 1)?.songs?.take(MAX_KEYS)?.map { Usb.songName(it.name) }
     }
 
     // the stream's codec and bitrate, as the PC shows them (FLAC is HI-FI)
@@ -342,7 +350,7 @@ class MainActivity : AppCompatActivity() {
     private fun toUsb() {
         when {
             Usb.root.isEmpty() -> { controller?.pause(); store.mode = "usb"; toast("MODE · USB · para elegir el pendrive (o una carpeta), MODE apretado. MODE otra vez: CD") }
-            Usb.scanning -> toast("USB · leyendo la carpeta…")
+            Usb.scanning -> { controller?.pause(); store.mode = "usb"; toast("USB · leyendo la carpeta…") }   // 0.1.11: in USB while it reads
             Usb.discs.isEmpty() -> usbRead(play = true)
             else -> { playUsb(store.usbDisc, store.usbTrack, store.usbPos); toast("MODE · USB · " + Usb.rootName.ifEmpty { "MÚSICA" } + " · ${Usb.discs.size} " + if (Usb.discs.size == 1) "carpeta" else "carpetas") }
         }
@@ -483,7 +491,7 @@ class MainActivity : AppCompatActivity() {
         val track = { n: Int -> if (n in all) { if (here != null && c != null) { c.seekTo(all.indexOf(n), 0); c.play() } else playCd(n); toast("TRACK · " + n.toString().padStart(2, '0')) }
             else toast(if (all.isEmpty()) "CD · no hay un disco" else "El disco tiene ${all.size} " + if (Cd.status == "files") "archivos" else "pistas") }
         when {
-            k == "eject" -> { c?.pause(); if (Cd.eject()) toast("EJECT · la lectora se abre") else toast("CD · no hay lectora"); main.post(cdPoll) }
+            k == "eject" -> { c?.pause(); toast("EJECT · …"); Thread { val ok = Cd.eject(); main.post { toast(if (ok) "EJECT · la lectora se abre" else "CD · no hay lectora"); refresh(); cdPoll.run() } }.start() }   // 0.1.11: off the main thread
             all.isEmpty() && k in setOf("sel", "next", "prev", "slot") -> { cdLook(play = true); toast(when (Cd.status) { "none" -> "CD · conectá la lectora por USB (OTG)"; "nodisc" -> "CD · poné un disco"; "perm" -> "CD · aceptá el permiso de Android para la lectora"; "empty" -> "CD · el disco no tiene música"; "error" -> "CD · no pude leer la lectora: desenchufala y volvé a enchufarla"; else -> "CD · leyendo…" }) }
             k == "sel" || k == "slot" -> when { c == null -> {}; c.isPlaying -> c.pause(); here != null -> c.play(); else -> playCd(store.cdTrack.takeIf { it in all } ?: all.first()) }
             k == "next" -> if (here != null && c != null) { if (c.hasNextMediaItem()) c.seekToNextMediaItem() else c.seekTo(0, 0); c.play() } else playCd(all.first())
@@ -544,8 +552,12 @@ class MainActivity : AppCompatActivity() {
         Thread { lib.read(); jfFace("source") }.start()
         refresh()
     }
+    private var keptJson = ""; private var keptQueue: List<JfSong> = emptyList()
     private fun jfQueue(c: MediaController?): List<JfSong> {
-        if (c == null || Jf.parse(c.currentMediaItem?.mediaId) == null) return Jf.queueFrom(store.jfQueue)
+        if (c == null || Jf.parse(c.currentMediaItem?.mediaId) == null) {   // 0.1.11: the kept queue parsed once, not at every refresh
+            val j = store.jfQueue; if (j != keptJson) { keptJson = j; keptQueue = Jf.queueFrom(j) }
+            return keptQueue
+        }
         return (0 until c.mediaItemCount).mapNotNull { Jf.parse(c.getMediaItemAt(it).mediaId)?.let { id -> Jf.song(id) } }
     }
     private fun playServer(songs: List<JfSong>, at: Int, pos: Long = 0) {
@@ -627,7 +639,7 @@ class MainActivity : AppCompatActivity() {
                 "artist" -> lib.albumsOf(id).map(album).also { o.put("title", lib.artists.firstOrNull { a -> a.id == id }?.name ?: "") }
                 "album" -> lib.songsOf(id).mapIndexed { i, x -> song(x, i) }.also { o.put("title", lib.albums.firstOrNull { a -> a.id == id }?.name ?: lib.songsOf(id).firstOrNull()?.album ?: "") }
                 "recent" -> lib.recent().map(album)
-                "queue" -> jfQueueNow().mapIndexed { i, x -> song(x, i) }
+                "queue" -> onMain { jfQueue(controller) }.mapIndexed { i, x -> song(x, i) }   // 0.1.11: the player only answers on the main thread
                 "search" -> { lib.read(); val (ar, al, so) = lib.search(text)
                     ar.map { JSONObject().put("t", "artist").put("id", it.id).put("name", it.name) } + al.map(album) + so.mapIndexed { i, x -> song(x, i).put("t", "found") } }
                 else -> emptyList()
@@ -636,7 +648,12 @@ class MainActivity : AppCompatActivity() {
         } catch (e: Exception) { o.put("items", JSONArray()).put("error", e.message ?: "error") }
         main.post { web.evaluateJavascript("window.faceJfList&&faceJfList($req,$o)", null) }
     }.start()
-    private fun jfQueueNow(): List<JfSong> = jfQueue(controller)
+    // something only the main thread may ask (the player), from another thread: waited for, at most 2 s
+    private fun <T> onMain(f: () -> T): T {
+        if (Looper.myLooper() == Looper.getMainLooper()) return f()
+        val box = java.util.concurrent.FutureTask(java.util.concurrent.Callable { f() }); main.post(box)
+        return box.get(2, java.util.concurrent.TimeUnit.SECONDS)
+    }
     // what's touched in the lists plays: an album from a song, a found song alone with the others found, AL AZAR
     private fun jfPlay(kind: String, id: String, index: Int) = Thread {
         val songs: List<JfSong>; var at = index

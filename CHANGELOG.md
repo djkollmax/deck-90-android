@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.11
+
+- Big keys: in USB, CD and SERVER one key per song (state's memories up to 999), scrolling three rows at a time with the
+  top of a fourth showing; the song playing is scrolled into view. The radio keeps its twelve memories.
+- Radio drops: after the first retry (a new address from Radio Browser), tries again after 2, 4, 8, 15, 30 and 60 s with
+  Now.error "RECONNECT" (RECONNECTING… on the display); half a minute playing well starts the count over. `retried`
+  was never reset, so a second drop of the same station stopped on NO SIGNAL for good.
+- USB: discnext/discprev with no folders computed `% 0` (ArithmeticException, the app closed).
+- MÚSICA → LO QUE SUENA asked the MediaController from the list's thread (it threw; the list came empty): asked on the
+  main thread (onMain). Jf.read/Tel.read asked while a reading runs wait for it instead of answering empty.
+- CD EJECT runs off the main thread (CdDrive's commands are synchronized with the reads playing).
+- RadioService's background executor has three threads (a slow server held LOCALES and the rest of the car's lists).
+- The kept SERVER queue is parsed once, not at every refresh (four times a second).
+
 ## 0.1.10
 
 - TEL (Tel.kt): SERVER's second source, the phone's music from MediaStore (IS_MUSIC, apps' and voice folders and

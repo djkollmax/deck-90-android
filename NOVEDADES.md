@@ -1,5 +1,22 @@
 # Novedades
 
+## 0.1.11 — 2026-11-20
+
+### Nuevo
+- **Las teclas grandes de los temas muestran todos los temas**, no solo 12: deslizás hacia abajo y aparecen el 13, el
+  14… (asoma la fila de abajo para que se note que hay más). Vale para el pendrive, el CD, el servidor y el teléfono,
+  y el tema que suena se acomoda solo a la vista. En la radio siguen las 12 memorias.
+
+### Arreglos
+- **La radio que se corta se vuelve a sintonizar sola**, cada vez más espaciado (como el RECONECTANDO de la PC), y el
+  display dice RECONNECTING… Antes, si una radio se cortaba dos veces, quedaba en NO SIGNAL hasta tocarla.
+- USB: ◀ CARPETA y CARPETA ▶ sin pendrive cerraban la app. Ahora te piden elegirlo.
+- MÚSICA → LO QUE SUENA salía vacío: ahora muestra los temas que suenan.
+- La primera vez que abrís DISCOS o ARTISTAS, mientras se lee la biblioteca, ya no sale vacío: espera y los muestra.
+- CD: EJECT ya no congela la pantalla mientras la lectora termina de leer.
+- En el auto, un servidor lento ya no traba las otras listas (radios locales, el teléfono).
+- MODE a USB mientras lee la carpeta queda en USB.
+
 ## 0.1.10 — 2026-11-19
 
 ### Nuevo

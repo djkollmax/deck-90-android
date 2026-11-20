@@ -84,7 +84,7 @@ object Tel : MusicLib {
         val ctx = app ?: return false
         if (!ready) { error = "permission"; return false }
         if (!force && songs.isNotEmpty() && System.currentTimeMillis() - readAt < 5 * 60_000L) return true
-        if (reading) return songs.isNotEmpty()
+        if (reading) { val t0 = System.currentTimeMillis(); while (reading && songs.isEmpty() && System.currentTimeMillis() - t0 < 30_000) Thread.sleep(100); return songs.isNotEmpty() }   // 0.1.11: wait for it
         reading = true; Now.changed()
         try {
             val uri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
