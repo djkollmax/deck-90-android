@@ -1,5 +1,17 @@
 # Novedades
 
+## 0.1.12 — 2026-11-20
+
+### Arreglos
+- **La radio ya no se queda callada después de un rato.** Algunas radios cortan la transmisión cada tanto: antes el
+  estéreo pasaba solo a la memoria siguiente o se quedaba quieto. Ahora vuelve a sintonizar la misma radio al toque.
+- **Con la pantalla apagada, la reconexión funciona:** mientras espera para volver a probar, la tablet o el celular no
+  se duermen, no apagan el Wi‑Fi y Android no cierra la app (antes, si se cortaba con la pantalla apagada, no volvía
+  nunca). Y sigue probando una
+  vez por minuto durante media hora, no solo dos minutos.
+- **El servidor también se reconecta:** si se corta el Wi‑Fi o el servidor tarda, sigue el mismo tema desde donde
+  estaba, en vez de quedar en NO SERVER.
+
 ## 0.1.11 — 2026-11-20
 
 ### Nuevo

@@ -63,6 +63,51 @@ class RadioService : MediaLibraryService() {
     private var playingSince = 0L
     private val main = Handler(android.os.Looper.getMainLooper())
     private val RETRY_MS = longArrayOf(2_000, 4_000, 8_000, 15_000, 30_000, 60_000)
+    // 0.1.12: then once a minute, for half an hour (it gave up after two minutes: a long cut with the screen off was the end)
+    private val MAX_TRIES = RETRY_MS.size + 30
+    private var nowId: String? = null
+    private var nowIndex = -1
+    // 0.1.12: while it waits to try again the player holds nothing, so with the screen off the tablet slept (the
+    // retry never came) and turned its Wi-Fi off: the service keeps the CPU and the Wi-Fi awake until it plays again
+    private var cpuHold: android.os.PowerManager.WakeLock? = null
+    private var wifiHold: android.net.wifi.WifiManager.WifiLock? = null
+    // and the service stays in the foreground: with the player stopped by the error Media3 let it go to the background,
+    // where Android freezes or closes an app with the screen off (onUpdateNotification below)
+    @Volatile private var reconnecting = false
+    private fun holdOn(ms: Long) {
+        reconnecting = true
+        runCatching {
+            val cpu = cpuHold ?: (getSystemService(POWER_SERVICE) as android.os.PowerManager)
+                .newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "deck90:reconnect").apply { setReferenceCounted(false) }.also { cpuHold = it }
+            cpu.acquire(ms)
+            @Suppress("DEPRECATION")
+            val wifi = wifiHold ?: (applicationContext.getSystemService(WIFI_SERVICE) as android.net.wifi.WifiManager)
+                .createWifiLock(android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF, "deck90:reconnect").apply { setReferenceCounted(false) }.also { wifiHold = it }
+            if (!wifi.isHeld) wifi.acquire()
+        }
+    }
+    private fun holdOff() { reconnecting = false; runCatching { cpuHold?.takeIf { it.isHeld }?.release(); wifiHold?.takeIf { it.isHeld }?.release() } }
+    private fun isRadio(id: String?) = id == Store.TUNED || Store.parse(id) != null
+
+    // 0.1.12: the radio or the server stopped (a drop, or a station's stream that just ended): the same item again,
+    // longer and longer apart (RECONNECTING… on the display), the server's song from where it was. Half a minute
+    // playing well starts the count over
+    private fun reconnect(id: String, index: Int, ended: Boolean = false) {
+        if (playingSince > 0 && System.currentTimeMillis() - playingSince > 30_000) radioTries = 0
+        playingSince = 0
+        if (radioTries >= MAX_TRIES) { Now.error = if (isRadio(id)) "Sin señal" else "NO SERVER"; Now.changed(); holdOff(); return }
+        val wait = if (ended && radioTries == 0) 500L else RETRY_MS[radioTries.coerceAtMost(RETRY_MS.size - 1)]
+        radioTries++
+        Now.error = "RECONNECT"; Now.changed()
+        holdOn(wait + 60_000)
+        main.postDelayed({
+            val p = player
+            if (p.playWhenReady && p.currentMediaItemIndex == index && p.currentMediaItem?.mediaId == id && (p.playerError != null || p.playbackState == Player.STATE_IDLE || p.playbackState == Player.STATE_ENDED)) {
+                if (p.playbackState == Player.STATE_ENDED || isRadio(id)) p.seekToDefaultPosition(index)
+                p.prepare(); p.play()
+            } else if (!p.isPlaying) holdOff()
+        }, wait)
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -83,6 +128,16 @@ class RadioService : MediaLibraryService() {
         Sleep.attach(player)
         player.addListener(object : Player.Listener {
             override fun onMediaItemTransition(item: MediaItem?, reason: Int) {
+                // 0.1.12: a station's stream that ended by itself (its server closed it: some do every so often) went
+                // on to the band's next memory, or stopped: it's the same station, tuned again
+                val was = nowId; val wasIndex = nowIndex
+                nowId = item?.mediaId; nowIndex = player.currentMediaItemIndex
+                if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO && isRadio(was) && wasIndex in 0 until player.mediaItemCount && player.getMediaItemAt(wasIndex).mediaId == was) {
+                    nowId = was; nowIndex = wasIndex
+                    player.seekToDefaultPosition(wasIndex); player.stop()
+                    reconnect(was!!, wasIndex, ended = true)
+                    return
+                }
                 val usb = Usb.parse(item?.mediaId)
                 val cd = Cd.parse(item?.mediaId)
                 val jf = Jf.parse(item?.mediaId)
@@ -112,8 +167,14 @@ class RadioService : MediaLibraryService() {
                     if (e is IcyInfo) { Now.song = (e.title ?: "").trim(); Now.changed() }
                 }
             }
+            // 0.1.12: the last station of the list (or one tuned from LOCALES) ending by itself: tuned again
+            override fun onPlaybackStateChanged(state: Int) {
+                val id = player.currentMediaItem?.mediaId
+                if (state == Player.STATE_ENDED && player.playWhenReady && isRadio(id)) reconnect(id!!, player.currentMediaItemIndex, ended = true)
+            }
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) { if (!playWhenReady) holdOff() }   // stopped by the person: nothing to keep awake
             override fun onIsPlayingChanged(isPlaying: Boolean) {
-                if (isPlaying) { jfSkips = 0; playingSince = System.currentTimeMillis(); if (Now.error == "RECONNECT") Now.error = "" }
+                if (isPlaying) { jfSkips = 0; playingSince = System.currentTimeMillis(); if (Now.error == "RECONNECT") Now.error = ""; holdOff() }
                 if (!isPlaying && Usb.parse(player.currentMediaItem?.mediaId) != null) store.usbPos = player.currentPosition   // the car comes back here
                 if (!isPlaying && Jf.parse(player.currentMediaItem?.mediaId) != null) { store.jfIndex = player.currentMediaItemIndex; store.jfPos = player.currentPosition }
                 Now.changed()
@@ -144,20 +205,17 @@ class RadioService : MediaLibraryService() {
                     when {
                         http?.responseCode == 401 -> { Jf.expired(); Now.error = "SIGN IN" }
                         http != null && jfSkips < 3 && player.hasNextMediaItem() -> { jfSkips++; Now.error = ""; player.seekToNextMediaItem(); player.prepare(); player.play() }
-                        else -> Now.error = if (Jf.signedIn) "NO SERVER" else "SIGN IN"
+                        // 0.1.12: no answer (the Wi-Fi went, the server rebooting): tried again, the song from where it was
+                        Jf.signedIn -> { reconnect(item.mediaId, player.currentMediaItemIndex); return }
+                        else -> Now.error = "SIGN IN"
                     }
                     Now.changed(); return
                 }
                 val st = (if (item.mediaId == Store.TUNED) store.tuned else Store.parse(item.mediaId)?.let { (b, s) -> store.station(b, s) }) ?: return
                 // it had played well for half a minute: a new drop, not the same one
                 if (playingSince > 0 && System.currentTimeMillis() - playingSince > 30_000) { retried = ""; radioTries = 0 }
-                playingSince = 0
-                if (retried != item.mediaId) { retried = item.mediaId; radioTries = 0; store.resolvedSet(st, null); Resolver.fail(st); player.prepare(); player.play(); return }
-                if (radioTries < RETRY_MS.size) {
-                    val wait = RETRY_MS[radioTries++]; val id = item.mediaId
-                    Now.error = "RECONNECT"; Now.changed()
-                    main.postDelayed({ if (player.currentMediaItem?.mediaId == id && player.playerError != null && player.playWhenReady) { player.prepare(); player.play() } }, wait)
-                } else { Now.error = "Sin señal"; Now.changed() }
+                if (retried != item.mediaId) { playingSince = 0; retried = item.mediaId; radioTries = 0; store.resolvedSet(st, null); Resolver.fail(st); holdOn(60_000); player.prepare(); player.play(); return }
+                reconnect(item.mediaId, player.currentMediaItemIndex)
             }
         })
         session = MediaLibrarySession.Builder(this, player, Library()).build()
@@ -165,12 +223,18 @@ class RadioService : MediaLibraryService() {
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? = session
 
+    // 0.1.12: reconnecting counts as playing for the notification, so the service isn't sent to the background
+    override fun onUpdateNotification(session: MediaSession, startInForegroundRequired: Boolean) {
+        super.onUpdateNotification(session, startInForegroundRequired || (reconnecting && player.playWhenReady))
+    }
+
     override fun onTaskRemoved(rootIntent: android.content.Intent?) {
         if (!player.playWhenReady || player.mediaItemCount == 0) stopSelf()   // swiped away while silent: gone
     }
 
     override fun onDestroy() {
         main.removeCallbacksAndMessages(null)
+        holdOff()
         Sleep.attach(null)
         background.shutdownNow()
         session?.run { player.release(); release() }

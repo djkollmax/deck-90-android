@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.12
+
+- A station whose stream ends by itself (its server closes the connection; ExoPlayer sees the end of the item) went
+  on to the band's next memory (MEDIA_ITEM_TRANSITION_REASON_AUTO) or to STATE_ENDED: the same station is tuned
+  again, at once the first time.
+- While waiting to retry the player holds no wake or Wi-Fi lock (it's idle), so with the screen off the CPU slept, the
+  Handler's retry never ran and the Wi-Fi could switch off: the service holds a partial wake lock and a Wi-Fi lock
+  from the drop until it plays again or the person stops it, and keeps the service in the foreground meanwhile
+  (onUpdateNotification with startInForegroundRequired while reconnecting): Media3 let the stopped player's service go
+  to the background, where Android froze or closed it with the screen off.
+- Retries go on once a minute after the 2–60 s steps, for half an hour (MAX_TRIES), instead of stopping after ~2 min.
+- SERVER: an error with no HTTP answer (Wi-Fi gone, server restarting) retries the same way and resumes the song at
+  its position, instead of NO SERVER at once.
+
 ## 0.1.11
 
 - Big keys: in USB, CD and SERVER one key per song (state's memories up to 999), scrolling three rows at a time with the
