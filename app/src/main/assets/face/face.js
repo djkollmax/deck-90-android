@@ -31,7 +31,7 @@ const app = window.Deck90Android || {                              // a browser:
   spectrum: () => { const t = Date.now() / 400; return Array.from({ length: 28 }, (_, k) => (-28 - k * 0.9 + 8 * Math.sin(t + k * .7)).toFixed(1)).join(','); },
   discs: () => JSON.stringify(Array.from({ length: 9 }, (_, i) => ({ d: i + 1, name: ['Abbey Road', 'Kind of Blue', 'Rumours', 'Artaud', 'Clics Modernos', 'Discovery', 'Random Access Memories', 'Thriller', 'Nevermind'][i], songs: 9 + i }))),
   // SERVER, for a look in a browser: a small pretend library
-  jfServer: () => JSON.stringify({ server: 'http://192.168.0.199:8096', name: 'Damián', signedIn: !!window.jfDemo }),
+  jfServer: () => JSON.stringify({ server: 'http://192.168.0.199:8096', name: 'Damián', signedIn: !!window.jfDemo, source: window.jfDemoSrc || 'srv', ready: window.jfDemoSrc === 'tel' || !!window.jfDemo }),
   jfSignIn: (a, u) => setTimeout(() => { window.jfDemo = true; faceJf('signed', { name: u, albums: 1402 }); }, 300),
   jfSignOut: () => { window.jfDemo = false; },
   jfPlay: () => {},
@@ -300,19 +300,20 @@ function cdNow(s, u) {
 // SERVER (MODE): a Jellyfin song as the PC's stereo shows the DM-90's (its display speaks English, as the units do)
 function jfTrack(s, u, extra) {
   let title, artist, ok = false;
-  if (!u.signedIn) { title = 'SIGN IN'; artist = 'SERVER, USER AND PASSWORD · MODE HELD'; }
+  if (!u.signedIn && u.tel) { title = 'PHONE MUSIC'; artist = 'ALLOW ANDROID TO READ IT · SEL'; }
+  else if (!u.signedIn) { title = 'SIGN IN'; artist = 'SERVER, USER AND PASSWORD · EJECT'; }
   else if (s.error === 'NO SERVER') { title = 'NO SERVER'; artist = 'IS IT ON? AWAY FROM HOME: TAILSCALE'; }
-  else if (!u.total) { title = u.reading ? 'READING' : 'SERVER'; artist = (u.albums ? u.albums + ' ALBUMS · ' : '') + 'EJECT: THE LISTS'; }
+  else if (!u.total) { title = u.reading ? 'READING' : u.tel ? 'PHONE' : 'SERVER'; artist = (u.albums ? u.albums + ' ALBUMS · ' : '') + 'EJECT: THE LISTS · MODE HELD: SOURCE'; }
   else {
     ok = true; title = extra || u.title || 'SERVER';
     artist = [u.artist, u.album].filter(Boolean).join(' · ') + (s.playing ? '' : ' · PAUSE') + (u.rand ? ' · RAND' : '') + (u.rep === 1 ? ' · REP' : u.rep === 2 ? ' · REP 1' : '');
   }
-  return { title, artist, number: ok ? (u.track || u.n) : 0, length: u.len || 0, quality: s.quality || '', disc: ok, source: 'SRV', playing: true };
+  return { title, artist, number: ok ? (u.track || u.n) : 0, length: u.len || 0, quality: s.quality || '', disc: ok, source: u.source || 'SRV', playing: true };
 }
 function jfNow(s, u) {
-  el('nowBand').textContent = 'SERVER' + (u.total ? ' · TEMA ' + u.n + '/' + u.total : u.name ? ' · ' + u.name.toUpperCase() : '') + (u.rand ? ' · RAND' : '') + (u.rep ? ' · REP' : '') + (s.sleep > 0 ? ' · SLEEP ' + s.sleep + "'" : '');
-  el('nowName').textContent = !u.signedIn ? 'Tu música de Jellyfin' : s.error === 'NO SERVER' ? 'No contesta el servidor' : u.title || 'Elegí qué escuchar';
-  el('nowSong').textContent = !u.signedIn ? 'MODE apretado: servidor, usuario y contraseña' : s.error === 'NO SERVER' ? '¿Está prendido? Fuera de casa: Tailscale' : u.total ? [u.artist, u.album].filter(Boolean).join(' · ') : 'MÚSICA (abajo) o EJECT: las listas';
+  el('nowBand').textContent = (u.tel ? 'TEL' : 'SERVER') + (u.total ? ' · TEMA ' + u.n + '/' + u.total : u.name ? ' · ' + u.name.toUpperCase() : '') + (u.rand ? ' · RAND' : '') + (u.rep ? ' · REP' : '') + (s.sleep > 0 ? ' · SLEEP ' + s.sleep + "'" : '');
+  el('nowName').textContent = !u.signedIn && u.tel ? 'La música del teléfono' : !u.signedIn ? 'Tu música de Jellyfin' : s.error === 'NO SERVER' ? 'No contesta el servidor' : u.title || 'Elegí qué escuchar';
+  el('nowSong').textContent = !u.signedIn && u.tel ? 'SEL: Android te pide permiso para leerla' : !u.signedIn ? 'MÚSICA → SERVIDOR: servidor, usuario y contraseña' : s.error === 'NO SERVER' ? '¿Está prendido? Fuera de casa: Tailscale' : u.total ? [u.artist, u.album].filter(Boolean).join(' · ') : 'MÚSICA (abajo) o EJECT: las listas';
   const hi = /FLAC|ALAC|WAV/.test(s.quality || ''), q = el('nowQ'); q.textContent = (hi ? 'HI-FI · ' : '') + (s.quality || ''); q.classList.toggle('hifi', hi);
 }
 function usbNow(s, u) {
@@ -795,17 +796,28 @@ function jfShow(on) { el('jfBox').classList.toggle('show', on); if (!on) el('jfF
 function jfServer() { try { return JSON.parse(app.jfServer ? app.jfServer() : '{}'); } catch (_) { return {}; } }
 function jfHome() {
   jf.stack = []; el('jfFind').value = '';
-  const j = view.jf || {}, who = jfServer();
-  jfView({ kind: 'home', title: 'MÚSICA' + (who.name ? ' · ' + who.name.toUpperCase() : '') });
+  const j = view.jf || {}, who = jfServer(), tel = who.source === 'tel';
+  jfSrcPaint(who);
+  jfView({ kind: 'home', title: tel ? 'MÚSICA · TELÉFONO' : 'MÚSICA' + (who.name ? ' · ' + who.name.toUpperCase() : '') });
+  if (!who.ready && who.source) {                                   // 0.1.10: the source isn't ready: what it needs
+    return jfRender([tel ? { t: 'nav', k: 'allow', name: 'PERMITIR', sub: 'Android te pregunta si Deck 90 puede leer la música del teléfono' }
+      : { t: 'nav', k: 'login', name: 'ENTRAR AL SERVIDOR', sub: 'La dirección de tu Jellyfin, el usuario y la contraseña' }], '');
+  }
   jfRender([
-    { t: 'go', k: 'shuffle', name: 'AL AZAR', sub: '100 temas de toda la biblioteca' },
-    { t: 'nav', k: 'recent', name: 'RECIENTES', sub: 'Los discos que entraron último' },
+    { t: 'go', k: 'shuffle', name: 'AL AZAR', sub: tel ? '100 temas de todo el teléfono' : '100 temas de toda la biblioteca' },
+    { t: 'nav', k: 'recent', name: 'RECIENTES', sub: tel ? 'Los discos que copiaste último' : 'Los discos que entraron último' },
     { t: 'nav', k: 'albums', name: 'DISCOS', sub: j.albums ? j.albums + ' discos' : '' },
     { t: 'nav', k: 'artists', name: 'ARTISTAS', sub: j.artists ? j.artists + ' artistas' : '' },
     { t: 'nav', k: 'queue', name: 'LO QUE SUENA', sub: j.total ? j.total + ' temas' : '' },
-    { t: 'nav', k: 'login', name: 'SERVIDOR', sub: who.server || '' },
-  ], j.reading ? 'Leyendo la biblioteca…' : '');
+    tel ? null : { t: 'nav', k: 'login', name: 'SERVIDOR', sub: who.server || '' },
+  ].filter(Boolean), j.reading ? 'Leyendo la biblioteca…' : '');
 }
+// 0.1.10: SOURCE, as tabs over the lists
+function jfSrcPaint(who) { for (const b of el('jfSrc').children) b.classList.toggle('on', b.dataset.src === ((who || jfServer()).source || 'srv')); }
+el('jfSrc').addEventListener('click', e => {
+  const b = e.target.closest('button[data-src]'); if (!b) return;
+  if (app.jfSource) app.jfSource(b.dataset.src); else { window.jfDemoSrc = b.dataset.src; if (b.dataset.src !== 'usb') jfHome(); }
+});
 function jfView(v, push) {
   if (push && jf.view) jf.stack.push(jf.view);
   jf.view = v; el('jfTitle').textContent = v.title; el('jfBack').style.visibility = jf.stack.length ? 'visible' : 'hidden';
@@ -844,6 +856,7 @@ el('jfList').addEventListener('click', e => {
   if (d.t === 'go') { app.jfPlay && app.jfPlay(d.k, '', 0); jfShow(false); return; }
   if (d.t === 'nav') {
     if (d.k === 'login') { jfShow(false); return faceJf('login'); }
+    if (d.k === 'allow') { if (app.jfSource) app.jfSource('tel'); return; }
     return jfView({ kind: d.k, title: d.name }, true);
   }
   if (d.t === 'artist') return jfView({ kind: 'artist', id: d.id, title: d.name.toUpperCase() }, true);
@@ -884,12 +897,16 @@ el('jfGo').addEventListener('click', () => {
 });
 el('jfPw').addEventListener('keydown', e => { if (e.key === 'Enter') el('jfGo').click(); });
 el('jfLoginClose').addEventListener('click', () => el('jfLogin').classList.remove('show'));
+// 0.1.10: no server: the phone's own music (SOURCE TEL)
+el('jfUseTel').addEventListener('click', () => { el('jfLogin').classList.remove('show'); if (app.jfSource) app.jfSource('tel'); else { window.jfDemoSrc = 'tel'; faceJf('browse'); } });
 el('jfOut').addEventListener('click', () => { app.jfSignOut && app.jfSignOut(); el('jfLogin').classList.remove('show'); toast('SERVER · saliste del servidor'); });
 
 // what the app asks of the face: the sign-in, the lists, the sign-in's answer
 window.faceJf = (what, data) => {
   if (what === 'login') return jfLoginOpen();
-  if (what === 'browse') { if (!jfServer().signedIn && app.jfServer) return jfLoginOpen(); jfShow(true); return jfHome(); }
+  if (what === 'browse') { const w = jfServer(); if (!w.signedIn && w.source !== 'tel' && app.jfServer) return jfLoginOpen(); jfShow(true); return jfHome(); }
+  if (what === 'source') { if (el('jfBox').classList.contains('show') || jfServer().ready) { jfShow(true); jfHome(); } return; }   // 0.1.10: SOURCE changed
+  if (what === 'close') { jfShow(false); return; }
   if (what === 'signed') {
     el('jfGo').disabled = false;
     if (data && data.error) { el('jfLoginMsg').textContent = data.error; return; }

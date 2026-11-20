@@ -2,6 +2,21 @@
 
 ## 0.1.10 — 2026-11-19
 
+### Nuevo
+- **TEL: la música del teléfono, la tablet y la tarjeta SD.** En SERVER, **MODE apretado un segundo** (o las pestañas
+  **SERVIDOR · TELÉFONO · USB** arriba de MÚSICA) cambia de fuente. TELÉFONO usa la biblioteca de música que Android ya
+  tiene armada: toda la música de la memoria y de la SD, con **AL AZAR, RECIENTES, DISCOS, ARTISTAS** y la búsqueda,
+  igual que tu Jellyfin. No hay que elegir carpetas y lo que copies aparece solo. La primera vez Android pide permiso
+  para leer la música. En el auto aparece como **TEL · MÚSICA DEL TELÉFONO**, y el display dice **TEL** abajo de PLAY.
+- Sin servidor: en la pantalla para entrar a Jellyfin, **¿SIN SERVIDOR? LA MÚSICA DEL TELÉFONO**.
+
+### Arreglos en USB
+- Un archivo que el celular no puede tocar (o dañado) se saltea, en vez de parar todo con NO USB.
+- Ya no aparecen como temas las listas (.m3u, .pls), los .wma ni los MIDI, ni las carpetas del teléfono que no son
+  música (las notas de voz de WhatsApp, los tonos, las alarmas, las grabaciones).
+- Al elegir la carpeta dice cuál: Android no deja elegir la memoria del teléfono entera, así que es la carpeta **Music**
+  (o el pendrive, o la tarjeta SD entera).
+
 ### Arreglos en SERVER
 - Un tema de un compilado ahora dice **quién lo canta**, no "Various Artists".
 - Si el servidor no puede mandar un tema (un archivo dañado o que no puede convertir), **pasa al siguiente** en vez de

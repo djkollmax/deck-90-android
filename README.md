@@ -64,13 +64,19 @@ Son las mismas que en la PC:
 
 Como el DM-90 de la PC. La primera vez que elegís SERVER con MODE, pide la dirección del servidor (por ejemplo
 `192.168.0.199:8096`), el usuario y la contraseña. Deck 90 guarda el permiso que le da Jellyfin, nunca la contraseña.
-MODE apretado un segundo vuelve a pedirlos.
+Para entrar de nuevo, MÚSICA → SERVIDOR.
+
+- **SOURCE:** en SERVER, **MODE apretado un segundo** (o las pestañas de arriba de MÚSICA) pasa por **SERVIDOR** (tu
+  Jellyfin), **TELÉFONO** (TEL: toda la música de la memoria del celular o la tablet y de la tarjeta SD, de la
+  biblioteca que Android ya tiene armada, con artistas, discos y tapas; la primera vez Android pide permiso para leerla)
+  y **USB**. Lo que copies al teléfono aparece solo. En el auto, TEL está como **TEL · MÚSICA DEL TELÉFONO**.
 
 - **MÚSICA** (arriba de los números, o EJECT) abre las listas: **AL AZAR**, **RECIENTES**, **DISCOS**, **ARTISTAS**,
   **LO QUE SUENA** y la búsqueda, que encuentra artistas, discos y temas mientras escribís.
 - ◀◀ ▶▶ pasan de tema, 1 a 6 (y 7 a 12 manteniendo) van a un tema, **BAND** pasa de disco, **SCAN** es RAND y **LOC**
   es REP.
-- Suena en la calidad del archivo; lo que el celular no reproduce, el servidor lo manda como FLAC.
+- Suena en la calidad del archivo; lo que el celular no reproduce, el servidor lo manda como FLAC. Un tema que no se
+  puede tocar se saltea.
 - **Fuera de casa**, con [Tailscale](https://tailscale.com) prendido en el celular y en la PC: poné como servidor la
   dirección de Tailscale de la PC (`100.x.x.x:8096`), que anda en casa y afuera. En FLAC, una hora de música son unos
   400 MB de datos.

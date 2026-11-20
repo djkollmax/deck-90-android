@@ -2,6 +2,15 @@
 
 ## 0.1.10
 
+- TEL (Tel.kt): SERVER's second source, the phone's music from MediaStore (IS_MUSIC, apps' and voice folders and
+  clips under 20 s left out), grouped by ALBUM_ID with ALBUM_ARTIST, TRACK as disc×1000+n, BITRATE and (Android 14)
+  samplerate/bits_per_sample. Both sources implement MusicLib, so the face's lists, the car's (root "tel") and the
+  player are shared; TEL ids are "t<n>" inside the same jf: media ids, and Jf.stream/Jf.cover send them to content://
+  (the song, its album art). Music.source ("srv"/"tel") is kept; MODE held in SERVER and the face's tabs switch it,
+  USB going to the USB mode. READ_MEDIA_AUDIO (READ_EXTERNAL_STORAGE up to Android 12) is asked when TEL is chosen.
+- USB: only what the phone plays is listed (no playlists, WMA, MIDI); the phone's own non-music folders (Android,
+  WhatsApp, ringtones, recordings…) are skipped; a file the player can't parse or decode is skipped (up to three in a
+  row) instead of stopping on NO USB; the picker's toast names the folders Android lets be chosen.
 - SERVER: a song's artist is its performers (Artists), the album artist only without them (a compilation said
   "Various Artists"). A song the server answers with an error status is skipped (up to three in a row); a 401 signs
   out (Jf.expired) and asks to sign in again; no answer at all is still NO SERVER.

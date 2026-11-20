@@ -63,6 +63,7 @@ class RadioService : MediaLibraryService() {
         store = Store(this)
         Usb.load(this)
         Jf.load(this)
+        Music.load(this)
         val http = DefaultHttpDataSource.Factory().setUserAgent("Deck90-Android/" + BuildConfigInfo.version)
             .setAllowCrossProtocolRedirects(true).setConnectTimeoutMs(10_000).setReadTimeoutMs(15_000)
         val data = ResolvingDataSource.Factory(CdOrDefault.Factory(DefaultDataSource.Factory(this, http)), Resolver(store))   // the CD's own (Cd.kt)
@@ -124,6 +125,11 @@ class RadioService : MediaLibraryService() {
                     Now.changed(); return
                 }
                 if (item.localConfiguration?.uri?.scheme == "cdda") { Now.error = "NO DISC"; Now.changed(); return }   // the drive or the disc
+                if (Jf.parse(item.mediaId)?.let { Tel.mine(it) } == true) {   // 0.1.10: a song on the phone it can't play (or gone): the next one
+                    if (jfSkips < 3 && player.hasNextMediaItem()) { jfSkips++; Now.error = ""; player.seekToNextMediaItem(); player.prepare(); player.play() }
+                    else Now.error = "NO FILE"
+                    Now.changed(); return
+                }
                 if (Jf.parse(item.mediaId) != null) {
                     // 0.1.10: the server answered but not with the song (a file it can't read or convert): the next one, up
                     // to three in a row; it answered 401: sign in again; it didn't answer at all: NO SERVER
@@ -172,8 +178,9 @@ class RadioService : MediaLibraryService() {
                 parentId == "root" -> Bands.order.map { folder("band:$it", "RADIO " + Bands.label(it)) } + folder("band:${Bands.LOCAL}", "RADIOS LOCALES") +
                     (if (Usb.discs.isNotEmpty()) listOf(folder("usb", "USB · " + Usb.rootName.ifEmpty { "MÚSICA" })) else emptyList()) +
                     (if (Cd.count() > 0) listOf(folder("cd", "CD · " + (Cd.names?.album?.ifEmpty { null } ?: if (Cd.status == "files") "MP3" else "AUDIO"))) else emptyList()) +
-                    (if (Jf.signedIn) listOf(folder("jf", "SERVER · MÚSICA")) else emptyList())
-                parentId == "jf" || parentId.startsWith("jf") -> return server(parentId, params)
+                    (if (Jf.signedIn) listOf(folder("jf", "SERVER · MÚSICA")) else emptyList()) +
+                    (if (Tel.ready) listOf(folder("tel", "TEL · MÚSICA DEL TELÉFONO")) else emptyList())        // 0.1.10
+                parentId == "jf" || parentId.startsWith("jf") || parentId.startsWith("tel") -> return server(parentId, params)
                 parentId == "cd" -> Cd.playlist(1).first
                 parentId == "usb" -> (1..Usb.discs.size).mapNotNull { Usb.discItem(it) }
                 parentId.startsWith("usbdisc:") -> parentId.removePrefix("usbdisc:").toIntOrNull()?.let { d -> Usb.playlist(d, 1).first } ?: emptyList()
@@ -184,25 +191,28 @@ class RadioService : MediaLibraryService() {
             return Futures.immediateFuture(LibraryResult.ofItemList(ImmutableList.copyOf(list), params))
         }
 
-        // SERVER in the car (Jellyfin.kt): AL AZAR, RECIENTES, DISCOS and ARTISTAS by letter, an artist's albums, an
-        // album's songs. What needs the server is asked off the main thread
+        // SERVER in the car (Jellyfin.kt), and TEL (Tel.kt) the same from "tel": AL AZAR, RECIENTES, DISCOS and ARTISTAS
+        // by letter, an artist's albums, an album's songs (those two by their own ids). What needs the server is asked
+        // off the main thread
         private fun server(id: String, params: LibraryParams?): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> =
             background.submit<LibraryResult<ImmutableList<MediaItem>>> {
                 val playable = { mid: String, title: String -> MediaItem.Builder().setMediaId(mid).setMediaMetadata(MediaMetadata.Builder().setTitle(title)
                     .setIsBrowsable(false).setIsPlayable(true).setMediaType(MediaMetadata.MEDIA_TYPE_PLAYLIST).build()).build() }
                 val music = { mid: String, title: String -> MediaItem.Builder().setMediaId(mid).setMediaMetadata(MediaMetadata.Builder().setTitle(title)
                     .setIsBrowsable(true).setIsPlayable(false).setMediaType(MediaMetadata.MEDIA_TYPE_FOLDER_MIXED).build()).build() }
-                Jf.read()
+                val tel = id.startsWith("tel"); val p = if (tel) "tel" else "jf"
+                val lib: MusicLib = when { tel -> Tel; id.startsWith("jfartist:") -> Music.of(id.removePrefix("jfartist:")); id.startsWith("jfalbum:") -> Music.of(id.removePrefix("jfalbum:")); else -> Jf }
+                lib.read()
                 val list: List<MediaItem> = when {
-                    id == "jf" -> listOf(playable("jfshuffle", "AL AZAR"), music("jfrecent", "RECIENTES"), music("jfalbums", "DISCOS (${Jf.albums.size})"),
-                        music("jfartists", "ARTISTAS (${Jf.artists.size})"))
-                    id == "jfrecent" -> Jf.recent().map { Jf.albumItem(it) }
-                    id == "jfalbums" -> Jf.albums.groupBy { Jf.letter(it.name) }.toSortedMap(compareBy { if (it == "#") "~" else it }).map { (l, a) -> music("jfalbums:$l", "$l · ${a.size}") }
-                    id.startsWith("jfalbums:") -> id.removePrefix("jfalbums:").let { l -> Jf.albums.filter { Jf.letter(it.name) == l }.map { Jf.albumItem(it) } }
-                    id == "jfartists" -> Jf.artists.groupBy { Jf.letter(it.name) }.toSortedMap(compareBy { if (it == "#") "~" else it }).map { (l, a) -> music("jfartists:$l", "$l · ${a.size}") }
-                    id.startsWith("jfartists:") -> id.removePrefix("jfartists:").let { l -> Jf.artists.filter { Jf.letter(it.name) == l }.map { Jf.artistItem(it) } }
-                    id.startsWith("jfartist:") -> Jf.albumsOf(id.removePrefix("jfartist:")).map { Jf.albumItem(it) }
-                    id.startsWith("jfalbum:") -> id.removePrefix("jfalbum:").let { a -> Jf.songsOf(a).map { Jf.item(it, "album:$a") } }
+                    id == p -> listOf(playable("${p}shuffle", "AL AZAR"), music("${p}recent", "RECIENTES"), music("${p}albums", "DISCOS (${lib.albums.size})"),
+                        music("${p}artists", "ARTISTAS (${lib.artists.size})"))
+                    id == "${p}recent" -> lib.recent().map { Jf.albumItem(it) }
+                    id == "${p}albums" -> lib.albums.groupBy { Jf.letter(it.name) }.toSortedMap(compareBy { if (it == "#") "~" else it }).map { (l, a) -> music("${p}albums:$l", "$l · ${a.size}") }
+                    id.startsWith("${p}albums:") -> id.removePrefix("${p}albums:").let { l -> lib.albums.filter { Jf.letter(it.name) == l }.map { Jf.albumItem(it) } }
+                    id == "${p}artists" -> lib.artists.groupBy { Jf.letter(it.name) }.toSortedMap(compareBy { if (it == "#") "~" else it }).map { (l, a) -> music("${p}artists:$l", "$l · ${a.size}") }
+                    id.startsWith("${p}artists:") -> id.removePrefix("${p}artists:").let { l -> lib.artists.filter { Jf.letter(it.name) == l }.map { Jf.artistItem(it) } }
+                    id.startsWith("jfartist:") -> lib.albumsOf(id.removePrefix("jfartist:")).map { Jf.albumItem(it) }
+                    id.startsWith("jfalbum:") -> id.removePrefix("jfalbum:").let { a -> lib.songsOf(a).map { Jf.item(it, "album:$a") } }
                     else -> emptyList()
                 }
                 LibraryResult.ofItemList(ImmutableList.copyOf(list), params)
@@ -212,10 +222,11 @@ class RadioService : MediaLibraryService() {
         private fun serverQueue(id: String): ListenableFuture<MediaSession.MediaItemsWithStartPosition> = background.submit<MediaSession.MediaItemsWithStartPosition> {
             val songs: List<JfSong>; var at = 0
             if (id == "jfshuffle") songs = Jf.shuffle()
+            else if (id == "telshuffle") { songs = Tel.shuffle(); Music.set("tel") }
             else {
                 val s = Jf.song(Jf.parse(id) ?: "")
                 val album = s?.albumId.orEmpty()
-                val all = if (album.isNotEmpty()) Jf.songsOf(album) else emptyList()
+                val all = if (album.isNotEmpty()) Music.songsOf(album) else emptyList()
                 songs = all.ifEmpty { listOfNotNull(s) }
                 at = songs.indexOfFirst { "jf:" + it.id == id }.coerceAtLeast(0)
             }
@@ -244,7 +255,7 @@ class RadioService : MediaLibraryService() {
         // a memory asked for (by the car or the phone, with only its id): its whole band, starting there
         override fun onSetMediaItems(mediaSession: MediaSession, controller: MediaSession.ControllerInfo, mediaItems: MutableList<MediaItem>, startIndex: Int, startPositionMs: Long): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
             val askedId = mediaItems.getOrNull(if (startIndex == C.INDEX_UNSET) 0 else startIndex)?.mediaId
-            if (mediaItems.size <= 1 && (askedId == "jfshuffle" || Jf.parse(askedId) != null)) return serverQueue(askedId!!)
+            if (mediaItems.size <= 1 && (askedId == "jfshuffle" || askedId == "telshuffle" || Jf.parse(askedId) != null)) return serverQueue(askedId!!)
             Cd.parse(askedId)?.let { n -> if (mediaItems.size <= 1) { val (items, at) = Cd.playlist(n); Now.error = ""
                 return Futures.immediateFuture(MediaSession.MediaItemsWithStartPosition(items, at, C.TIME_UNSET)) } }
             val song = Usb.parse(askedId)
@@ -269,7 +280,7 @@ class RadioService : MediaLibraryService() {
 
         // the car starts (or "play" on the headphones): the last station heard
         override fun onPlaybackResumption(mediaSession: MediaSession, controller: MediaSession.ControllerInfo): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
-            if (store.mode == "server" && Jf.signedIn) {
+            if (store.mode == "server" && (Jf.signedIn || Tel.ready)) {
                 val q = Jf.queueFrom(store.jfQueue)
                 if (q.isNotEmpty()) return Futures.immediateFuture(MediaSession.MediaItemsWithStartPosition(q.map { Jf.item(it) }, store.jfIndex.coerceIn(0, q.size - 1), store.jfPos))
             }

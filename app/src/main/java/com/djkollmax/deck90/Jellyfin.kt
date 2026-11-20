@@ -29,24 +29,25 @@ data class JfArtist(val id: String, val name: String)
 data class JfSong(val id: String, val name: String, val artist: String, val album: String, val albumId: String,
     val n: Int, val disc: Int, val len: Int, val codec: String = "", val kbps: Int = 0, val rate: Int = 0, val bits: Int = 0)
 
-object Jf {
+object Jf : MusicLib {
     private const val PREFS = "jellyfin"
     @Volatile var server = ""; private set
     @Volatile var user = ""; private set                             // the user's id
     @Volatile var name = ""; private set                             // the user's name, as Jellyfin says it
     @Volatile private var token = ""
     @Volatile private var device = ""
-    @Volatile var albums: List<JfAlbum> = emptyList(); private set
-    @Volatile var artists: List<JfArtist> = emptyList(); private set
-    @Volatile var readAt = 0L; private set                           // when the library was last read
-    @Volatile var reading = false; private set
-    @Volatile var error = ""; private set
+    @Volatile override var albums: List<JfAlbum> = emptyList(); private set
+    @Volatile override var artists: List<JfArtist> = emptyList(); private set
+    @Volatile override var readAt = 0L; private set                           // when the library was last read
+    @Volatile override var reading = false; private set
+    @Volatile override var error = ""; private set
     private val songs = java.util.concurrent.ConcurrentHashMap<String, List<JfSong>>()   // album id → its songs
     private val byId = java.util.concurrent.ConcurrentHashMap<String, JfSong>()
     @Volatile private var loaded = false
     private lateinit var app: Context
 
     val signedIn get() = token.isNotEmpty() && user.isNotEmpty() && server.isNotEmpty()
+    override val ready get() = signedIn
 
     fun load(ctx: Context) {
         if (loaded) return
@@ -157,7 +158,7 @@ object Jf {
     }
 
     // the albums and artists read (again): blocking. False when the server didn't answer
-    fun read(force: Boolean = false): Boolean {
+    override fun read(force: Boolean): Boolean {
         if (!signedIn) return false
         if (!force && albums.isNotEmpty() && System.currentTimeMillis() - readAt < 6 * 3600_000L) return true
         if (reading) return albums.isNotEmpty()
@@ -178,7 +179,8 @@ object Jf {
     }
 
     // an album's songs, in the order of the disc (blocking; kept once read)
-    fun songsOf(albumId: String): List<JfSong> {
+    override fun songsOf(albumId: String): List<JfSong> {
+        if (Tel.mine(albumId)) return Tel.songsOf(albumId)
         songs[albumId]?.let { return it }
         if (!signedIn || !ID.matches(albumId)) return emptyList()
         return try {
@@ -188,7 +190,8 @@ object Jf {
             songs[albumId] = list; list.forEach { byId[it.id] = it }; list
         } catch (e: Exception) { fail(e); emptyList() }
     }
-    fun albumsOf(artistId: String): List<JfAlbum> {
+    override fun albumsOf(artistId: String): List<JfAlbum> {
+        if (Tel.mine(artistId)) return Tel.albumsOf(artistId)
         val mine = albums.filter { it.artistId == artistId }
         if (mine.isNotEmpty() || !signedIn) return mine
         return try {
@@ -199,20 +202,20 @@ object Jf {
         } catch (e: Exception) { fail(e); emptyList() }
     }
     // the newest albums on the server
-    fun recent(): List<JfAlbum> = try {
+    override fun recent(): List<JfAlbum> = try {
         val r = call("GET", "/Users/$user/Items", mapOf("IncludeItemTypes" to "MusicAlbum", "Recursive" to true, "SortBy" to "DateCreated",
             "SortOrder" to "Descending", "Limit" to 60, "Fields" to "AlbumArtist,ProductionYear")) as? JSONObject
         val a = r?.optJSONArray("Items") ?: JSONArray()
         (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { JfAlbum(it.optString("Id"), it.optString("Name"), it.optString("AlbumArtist"), it.optInt("ProductionYear")) }
     } catch (e: Exception) { fail(e); emptyList() }
     // songs from the whole library at random (AL AZAR)
-    fun shuffle(count: Int = 100): List<JfSong> = try {
+    override fun shuffle(count: Int): List<JfSong> = try {
         val r = call("GET", "/Users/$user/Items", mapOf("IncludeItemTypes" to "Audio", "Recursive" to true, "SortBy" to "Random", "Limit" to count,
             "Fields" to "MediaSources")) as? JSONObject
         songsFrom(r?.optJSONArray("Items") ?: JSONArray()).also { l -> l.forEach { byId[it.id] = it } }
     } catch (e: Exception) { fail(e); emptyList() }
     // any words in the song, the album or the artist: artists and albums from what's kept, songs from the server
-    fun search(text: String): Triple<List<JfArtist>, List<JfAlbum>, List<JfSong>> {
+    override fun search(text: String): Triple<List<JfArtist>, List<JfAlbum>, List<JfSong>> {
         val words = sortKey(text).split(Regex("\\s+")).filter { it.isNotEmpty() }
         if (words.isEmpty()) return Triple(emptyList(), emptyList(), emptyList())
         val hit = { s: String -> val k = sortKey(s); words.all { k.contains(it) } }
@@ -226,8 +229,10 @@ object Jf {
         return Triple(ar, al, so)
     }
     fun song(id: String): JfSong? = byId[id]
+    // 0.1.10: TEL's songs, known by their ids as the server's are
+    fun know(list: List<JfSong>) { list.forEach { byId[it.id] = it } }
 
-    private val ID = Regex("^[0-9a-fA-F-]{1,64}$")
+    private val ID = Regex("^([0-9a-fA-F-]{1,64}|t\\d{1,19})$")             // the server's, or TEL's ("t1234", Tel.kt)
     fun songsFrom(a: JSONArray): List<JfSong> = (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { i ->
         val src = i.optJSONArray("MediaSources")?.optJSONObject(0)
         val st = src?.optJSONArray("MediaStreams")?.let { s -> (0 until s.length()).mapNotNull { s.optJSONObject(it) }.firstOrNull { it.optString("Type") == "Audio" } }
@@ -249,13 +254,14 @@ object Jf {
 
     // the address a song's sound comes from, with the token: only for the player (RadioService.Resolver)
     fun stream(id: String): String {
+        if (Tel.mine(id)) return Tel.stream(id)                       // 0.1.10: a song on the phone
         if (!signedIn || !ID.matches(id)) throw IOException("signed out")
         return "$server/Audio/$id/universal?UserId=$user&DeviceId=$device&MaxStreamingBitrate=140000000" +
             "&Container=flac,mp3,aac,m4a%7Caac,m4b%7Caac,ogg,oga,opus,webma,wav&TranscodingContainer=flac&TranscodingProtocol=http" +
             "&AudioCodec=flac&api_key=$token"
     }
     // an album's picture (Jellyfin serves pictures without a token)
-    fun cover(albumId: String): Uri? = if (signedIn && ID.matches(albumId)) Uri.parse("$server/Items/$albumId/Images/Primary?maxHeight=300&quality=85") else null
+    fun cover(albumId: String): Uri? = if (Tel.mine(albumId)) Tel.cover(albumId) else if (signedIn && ID.matches(albumId)) Uri.parse("$server/Items/$albumId/Images/Primary?maxHeight=300&quality=85") else null
 
     // the player's items and the car's
     fun item(s: JfSong, playlist: String = ""): MediaItem = MediaItem.Builder().setMediaId("jf:${s.id}").setUri("deck90://jf/${s.id}")

@@ -52,6 +52,8 @@
 <div id="jfBox" class="sheet" role="dialog" aria-label="Música del servidor">
   <div class="rf-card">
     <div class="rf-head"><button type="button" id="jfBack" aria-label="Atrás">◀</button><span id="jfTitle">MÚSICA</span><button type="button" id="jfClose" aria-label="Cerrar">✕</button></div>
+    <!-- 0.1.10: SOURCE: the server, the phone's music, the pendrive -->
+    <div class="jf-src" id="jfSrc" role="tablist"><button type="button" data-src="srv">SERVIDOR</button><button type="button" data-src="tel">TELÉFONO</button><button type="button" data-src="usb">USB</button></div>
     <input id="jfFind" class="jf-find" spellcheck="false" autocomplete="off" enterkeyhint="search" placeholder="Buscar: artista, disco o tema">
     <div class="rf-msg" id="jfMsg"></div>
     <div id="jfList" class="rf-list" role="listbox"></div>
@@ -68,6 +70,7 @@
     <div class="rf-help">La contraseña va solo a tu servidor: Deck 90 guarda el permiso que te da Jellyfin, nunca la contraseña.
       Fuera de casa, con Tailscale prendido en el celular, poné la dirección de Tailscale de la PC (100.x.x.x:8096).</div>
     <button type="button" id="jfOut">SALIR DEL SERVIDOR</button>
+    <button type="button" id="jfUseTel" class="jf-alt">¿SIN SERVIDOR? LA MÚSICA DEL TELÉFONO</button>
   </div>
 </div>
 <div id="toast" role="status"></div>
