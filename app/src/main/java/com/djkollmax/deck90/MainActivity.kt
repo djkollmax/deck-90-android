@@ -189,7 +189,7 @@ class MainActivity : AppCompatActivity() {
         tune(store.band, (if (dir > 0) full.firstOrNull { it > from } ?: full.first() else full.lastOrNull { it < from } ?: full.last()))
     }
 
-    private fun toast(text: String) = main.post { web.evaluateJavascript("window.faceToast&&faceToast(${JSONObject.quote(text)})", null) }
+    private fun toast(text: String, ms: Int = 1800) = main.post { web.evaluateJavascript("window.faceToast&&faceToast(${JSONObject.quote(text)},$ms)", null) }
 
     private fun volume(audio: AudioManager) {
         val max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
@@ -342,7 +342,8 @@ class MainActivity : AppCompatActivity() {
         }
     }
     private fun usbChoose() {
-        toast("USB · elegí el pendrive (o una carpeta con música) y tocá USAR ESTA CARPETA")
+        // 0.1.10: Android doesn't let the phone's memory be chosen whole (nor Download): its Music folder, or the card's
+        toast("USB · elegí el pendrive, la tarjeta SD o la carpeta Music del teléfono, y tocá USAR ESTA CARPETA", 3200)
         runCatching { usbPicker.launch(null) }.onFailure { toast("USB · este celular no deja elegir carpetas") }
     }
     // the folder read again; then, if asked, its first disc (or the one it was on) plays

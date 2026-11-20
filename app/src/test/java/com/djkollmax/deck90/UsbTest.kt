@@ -23,4 +23,20 @@ class UsbTest {
         assertEquals("Disco 2", Usb.discName("Disco 2", ""))
         assertEquals("Abbey Road", Usb.discName("Abbey Road", "Beatles"))
     }
+
+    @Test fun `only what the phone plays is a song - no playlists, MIDI or WMA`() {
+        assertEquals(true, Usb.isSong("01 Tema.flac", "audio/flac"))
+        assertEquals(true, Usb.isSong("Tema.MP3", ""))
+        assertEquals(true, Usb.isSong("tema sin extensión", "audio/mpeg"))
+        for (n in listOf("lista.m3u", "lista.m3u8", "radio.pls", "disco.cue", "tema.wma", "tono.mid", "nota.amr", ".oculto.mp3"))
+            assertEquals(n, false, Usb.isSong(n, "audio/x-mpegurl"))
+        assertEquals(false, Usb.isSong("algo", "audio/x-scpls"))
+    }
+
+    @Test fun `the phone's own folders that aren't music are left out`() {
+        for (n in listOf("Android", "Notifications", "Ringtones", "Alarms", "Recordings", "WhatsApp", "DCIM", "LOST.DIR", ".thumbnails"))
+            assertEquals(n, false, Usb.isMusicFolder(n))
+        for (n in listOf("Music", "Música", "Soda Stereo", "Android Lust"))
+            assertEquals(n, true, Usb.isMusicFolder(n))
+    }
 }

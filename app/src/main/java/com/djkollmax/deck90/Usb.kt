@@ -19,7 +19,15 @@ data class Song(val name: String, val uri: String)
 data class Disc(val name: String, val songs: List<Song>)
 
 object Usb {
-    private val AUDIO = Regex("\\.(mp3|flac|m4a|aac|ogg|oga|opus|wav|wma|alac|aiff?)$", RegexOption.IGNORE_CASE)
+    // 0.1.10: what the phone plays (no WMA, no playlists, no MIDI: one of them stopped a disc with NO USB)
+    private val AUDIO = Regex("\\.(mp3|flac|m4a|aac|ogg|oga|opus|wav)$", RegexOption.IGNORE_CASE)
+    private val NOT_SONGS = Regex("\\.(m3u8?|pls|wpl|xspf|cue|mid|midi|amr|3gp|wma|ape|aiff?|dsf)$", RegexOption.IGNORE_CASE)
+    // 0.1.10: the phone's own folders that aren't music (a memory card or the phone chosen whole): apps' files and
+    // WhatsApp's voice notes, the ringtones and alarms, recordings
+    private val NOT_MUSIC = Regex("^(android|notifications|ringtones|alarms|recordings|call recordings|voice recorder|sounds|whatsapp|telegram|dcim|lost\\.dir|\\\$recycle\\.bin|system volume information)$", RegexOption.IGNORE_CASE)
+    fun isSong(name: String, mime: String): Boolean = !name.startsWith(".") && !NOT_SONGS.containsMatchIn(name) &&
+        (AUDIO.containsMatchIn(name) || (mime.startsWith("audio/") && !mime.contains("mpegurl") && !mime.contains("scpls") && !mime.contains("midi")))
+    fun isMusicFolder(name: String): Boolean = !name.startsWith(".") && !NOT_MUSIC.matches(name.trim())
     private const val MAX_DISCS = 2000
     private const val MAX_FOLDERS = 6000
     private const val MAX_DEPTH = 8
@@ -68,8 +76,8 @@ object Usb {
                     while (c.moveToNext()) {
                         val kid = c.getString(0) ?: continue; val n = c.getString(1) ?: continue; val mime = c.getString(2) ?: ""
                         if (n.startsWith(".")) continue
-                        if (mime == DocumentsContract.Document.MIME_TYPE_DIR) subs += kid to n
-                        else if (AUDIO.containsMatchIn(n) || mime.startsWith("audio/")) songs += Song(n, DocumentsContract.buildDocumentUriUsingTree(tree, kid).toString())
+                        if (mime == DocumentsContract.Document.MIME_TYPE_DIR) { if (isMusicFolder(n)) subs += kid to n }
+                        else if (isSong(n, mime)) songs += Song(n, DocumentsContract.buildDocumentUriUsingTree(tree, kid).toString())
                     }
                 }
                 if (songs.isNotEmpty()) found += Disc(discName(title, parent), songs.sortedWith(compareBy(natural) { it.name }).take(999))

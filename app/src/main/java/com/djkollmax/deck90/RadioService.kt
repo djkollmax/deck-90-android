@@ -113,7 +113,16 @@ class RadioService : MediaLibraryService() {
             override fun onPlayerError(error: PlaybackException) {
                 // the address stopped answering: forgotten, and the station asked of Radio Browser once more
                 val item = player.currentMediaItem ?: return
-                if (Usb.parse(item.mediaId) != null) { Now.error = "NO USB"; Now.changed(); return }   // the pendrive is out
+                if (Usb.parse(item.mediaId) != null) {
+                    // 0.1.10: a file the phone can't play (its format, or damaged): the next one, up to three in a row;
+                    // anything else is the pendrive or the card gone: NO USB
+                    val bad = error.errorCode in setOf(PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED, PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED,
+                        PlaybackException.ERROR_CODE_PARSING_MANIFEST_MALFORMED, PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED, PlaybackException.ERROR_CODE_DECODING_FORMAT_EXCEEDS_CAPABILITIES,
+                        PlaybackException.ERROR_CODE_DECODER_INIT_FAILED, PlaybackException.ERROR_CODE_DECODING_FAILED, PlaybackException.ERROR_CODE_AUDIO_TRACK_INIT_FAILED)
+                    if (bad && jfSkips < 3 && player.hasNextMediaItem()) { jfSkips++; Now.error = ""; player.seekToNextMediaItem(); player.prepare(); player.play() }
+                    else Now.error = "NO USB"
+                    Now.changed(); return
+                }
                 if (item.localConfiguration?.uri?.scheme == "cdda") { Now.error = "NO DISC"; Now.changed(); return }   // the drive or the disc
                 if (Jf.parse(item.mediaId) != null) {
                     // 0.1.10: the server answered but not with the song (a file it can't read or convert): the next one, up
