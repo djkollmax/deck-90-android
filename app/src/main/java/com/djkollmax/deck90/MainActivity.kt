@@ -383,7 +383,7 @@ class MainActivity : AppCompatActivity() {
         val songs = Usb.discs.getOrNull(disc - 1)?.songs?.size ?: 0
         val track = { n: Int -> if (n in 1..songs) { if (here != null && c != null) { c.seekTo(n - 1, 0); c.play() } else playUsb(disc, n, 0); toast("TRACK · " + n.toString().padStart(2, '0')) } else toast("La carpeta tiene $songs temas") }
         when {
-            Usb.discs.isEmpty() && k != "eject" && k != "slot" && k != "pwr" && k.let { it == "sel" || it == "next" || it == "prev" || it.startsWith("m") || it == "band" } -> {
+            Usb.discs.isEmpty() && k != "eject" && k != "slot" && k != "pwr" && k.let { it == "sel" || it == "next" || it == "prev" || it.startsWith("m") || it == "band" || it == "discnext" || it == "discprev" } -> {   // 0.1.11: ◀ CARPETA ▶ with no folders divided by zero and closed the app
                 if (Usb.root.isEmpty()) usbChoose() else usbRead(play = true); return true }
             k == "sel" -> when { c == null -> {}; c.isPlaying -> c.pause(); here != null -> c.play(); else -> playUsb(store.usbDisc, store.usbTrack, store.usbPos) }
             k == "next" -> if (here != null && c != null) { if (c.hasNextMediaItem()) c.seekToNextMediaItem() else c.seekTo(0, 0); c.play() } else playUsb(disc, 1, 0)
