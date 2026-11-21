@@ -1,5 +1,13 @@
 # Novedades
 
+## 0.1.13 — 2026-11-21
+
+### Mejor
+- **El frente del estéreo, más nítido:** la foto nueva de la PC, al doble de definición. Las teclas quedan en el mismo
+  lugar.
+- **El display muestra los espacios entre palabras** con sus segmentos apagados, como las demás letras (antes quedaban
+  vacíos).
+
 ## 0.1.12 — 2026-11-20
 
 ### Arreglos

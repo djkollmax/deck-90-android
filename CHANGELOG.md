@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.13
+
+- Face synced from deck-90 7.10.29: the sharper front (img/front.jpg, 4002×1078, registered onto the old one) and
+  dp940-display.js's "blank cells" (a space shows its cell's unlit segments).
+
 ## 0.1.12
 
 - A station whose stream ends by itself (its server closes the connection; ExoPlayer sees the end of the item) went
