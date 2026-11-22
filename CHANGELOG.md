@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.14
+
+- The double-DIN front from deck-90 7.10.30 (HDB held; held again, the DP940; kept as `front` in the face's look):
+  sync-face.sh copies `ddin-display.js`, `dot-glyphs.js` and `img/front-ddin.jpg`; face.js lays its keys from the
+  photo's pixels (`DDIN`, the PC's `STEREO_DDIN` plus the display as `view`), builds `Deck90DoubleDin` in place of
+  the DP940's display, and feeds it the second dot line (`line2`: the station, town and country; `album`: the album,
+  year and place in the list), the clock and temperature, and a 20-band spectrum from Levels' 28 (`ddSpectrum`).
+  The face's width follows its ratio (`--face-ratio`); a tablet lying down gives it 44vh.
+
 ## 0.1.13
 
 - Face synced from deck-90 7.10.29: the sharper front (img/front.jpg, 4002×1078, registered onto the old one) and

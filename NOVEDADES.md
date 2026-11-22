@@ -1,5 +1,14 @@
 # Novedades
 
+## 0.1.14 — 2026-11-22
+
+### Nuevo
+- **El estéreo doble DIN, el de la PC** (**HDB apretado** un segundo; otra vez, el DP940): el doble de alto, con un
+  display grande que muestra la radio o el tema en letras grandes y, abajo, dos líneas de puntitos (el tema y la radio
+  con su ciudad; o el artista y el disco, su año y el lugar en la lista), un analizador de espectro, el avance del tema,
+  y siempre la hora y la temperatura. Todos los colores de SDM le quedan. En el celular parado queda arriba, más grande;
+  en la tablet acostada, con ESTÉREO, ocupa toda la pantalla.
+
 ## 0.1.13 — 2026-11-21
 
 ### Mejor

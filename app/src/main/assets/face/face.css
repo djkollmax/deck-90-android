@@ -29,7 +29,7 @@ html, body {
     env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 .stereo .st-face {
-  width: min(100%, calc((100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom)) * 3.7124));
+  width: min(100%, calc((100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom)) * var(--face-ratio, 3.7124)));
   flex: none;
   touch-action: manipulation;
 }
@@ -144,12 +144,13 @@ body:is([data-view=vu], [data-view=spec]) :is(.pad-bands, .pad-mems) { display: 
 @media (min-aspect-ratio: 1/1) and (min-height: 561px) {
   .pad-mems { grid-template: repeat(2, minmax(44px, 1fr)) / repeat(6, minmax(0, 1fr)); }
   .stereo .st-face { width: min(100%, 30vh * 3.7124); }           /* the face leaves room for the keys */
+  .stereo .st-face[data-front=ddin] { width: min(100%, 44vh * 1.8); } /* 0.1.14: the double DIN, taller */
   .pad-views { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .pad-views [data-v=stereo] { display: block; }
   /* ESTÉREO: the face alone, as big as the screen allows */
   body[data-view=stereo] :is(.now, .pad) { display: none; }
   body[data-view=stereo] .stereo { justify-content: center; }
-  body[data-view=stereo] .stereo .st-face { width: min(100%, (100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom)) * 3.7124); }
+  body[data-view=stereo] .stereo .st-face { width: min(100%, (100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom)) * var(--face-ratio, 3.7124)); }
 }
 /* a tablet: bigger letters and keys */
 @media (min-width: 700px) and (min-height: 700px) {

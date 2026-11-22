@@ -43,7 +43,10 @@ Son las mismas que en la PC:
   aproximada), HORA Y TEMPERATURA y TIEMPO.
 - **SDM** recorre los 36 colores y looks del display de la PC, incluidos los que cambian el frente entero (TOKIO,
   ESTUDIO, TITANIO). Mantenido, vuelve al anterior.
-- **HDB** cambia entre cuatro brillos.
+- **HDB** cambia entre cuatro brillos. **HDB apretado** pasa al **estéreo doble DIN**, el de la PC: el doble de alto,
+  con un display grande (la radio o el tema en letras grandes, dos líneas de puntitos con el tema y la radio o el
+  artista y el disco, un analizador de espectro, el avance del tema, la hora y la temperatura). Apretado otra vez, el
+  DP940.
 - **PWR** apaga (GOOD BYE) y prende (HELLO). Mantenido, programa el apagado automático (**SLEEP**): 15, 30, 60 o 90
   minutos, y otra vez para sacarlo. Al final la radio baja sola en 10 segundos y se apaga, aunque la pantalla esté
   apagada.

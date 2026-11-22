@@ -20,6 +20,14 @@ const ST_KEYS = [   // [key, left %, top %, width %, height %, round]: Deck 90's
   ['pwr', 2.599, 80.891, 6.397, 12.987],                           // as on the PC's front (src/index.html)
   ['view', 28.886, 42.857, 53.373, 27.458],                         // the display itself: the VU, then the spectrum
 ];
+// 0.1.14: the double DIN, as on the PC (Deck 90 7.10.30, src/ui/stereo/stereo.js): its photo's pixels (1683 × 935)
+const DDIN = { img: 'img/front-ddin.jpg', w: 1683, h: 935, display: [466, 297, 934, 382], aux: [1556, 432, 22, 22],
+  keys: [['volup', 55, 285, 95, 135], ['voldown', 55, 560, 95, 130], ['sel', 78, 428, 170, 125, 1], ['mode', 178, 290, 138, 102, 1],
+    ['disp', 265, 440, 118, 105, 1], ['band', 178, 578, 138, 107, 1], ['hdb', 325, 315, 107, 105, 1], ['sdm', 325, 562, 107, 106, 1],
+    ['pwr', 58, 782, 122, 73], ['att', 190, 782, 115, 73], ['scan', 315, 782, 125, 73], ['loc', 440, 782, 125, 73],
+    ['prev', 582, 782, 124, 73], ['next', 706, 782, 126, 73], ['m1', 843, 782, 112, 78], ['m2', 958, 782, 112, 78],
+    ['m3', 1073, 782, 112, 78], ['m4', 1190, 782, 112, 78], ['m5', 1308, 782, 112, 78], ['m6', 1425, 782, 115, 78],
+    ['slot', 150, 118, 1380, 87], ['eject', 1513, 207, 101, 101, 1], ['view', 466, 297, 934, 382]] };
 const el = id => document.getElementById(id);
 const app = window.Deck90Android || {                              // a browser: a stand-in, for a look at the face
   state: () => JSON.stringify({ band: 'FM1', slot: 3, freq: '95.1', station: 'Metro', song: 'Un tema de prueba', playing: true, power: true, quality: 'AAC 128',
@@ -63,13 +71,39 @@ window.faceToast = toast;
     b.setAttribute('aria-label', k);
     face.append(b);
   }
-  if (typeof Deck90Display === 'function') {
-    disp = new Deck90Display(el('stDisplay'), { attackMs: 35, releaseMs: 140 });
-    const svg = disp.svg;                                         // only its glass, over the photo's own LCD
-    svg.setAttribute('viewBox', '23 24 1141 156'); svg.setAttribute('preserveAspectRatio', 'none');
-    svg.removeAttribute('width'); svg.removeAttribute('height');
+  const pct = ([x, y, w, h]) => 'left:' + (x / DDIN.w * 100).toFixed(3) + '%;top:' + (y / DDIN.h * 100).toFixed(3) + '%;width:' + (w / DDIN.w * 100).toFixed(3) + '%;height:' + (h / DDIN.h * 100).toFixed(3) + '%';
+  for (const [k, x, y, w, h, round] of DDIN.keys) {
+    const b = document.createElement('button');
+    b.className = 'st-hot dd' + (round ? ' round' : ''); b.dataset.st = k; b.style.cssText = pct([x, y, w, h]);
+    b.setAttribute('aria-label', k);
+    face.append(b);
   }
+  DDIN.at = pct;
 })();
+// the front (HDB held, 0.1.14): the DP940 or the double DIN, its photo, its display's place and its own display
+let ddin = false;
+const frontDp940 = { display: el('stDisplay').getAttribute('style'), aux: face.querySelector('.st-aux').getAttribute('style') };
+function frontApply() {
+  ddin = look.front === 'ddin' && typeof Deck90DoubleDin === 'function';
+  face.dataset.front = ddin ? 'ddin' : 'dp940';
+  face.querySelector('.st-photo').src = ddin ? DDIN.img : 'img/front.jpg';
+  el('stDisplay').setAttribute('style', ddin ? DDIN.at(DDIN.display) : frontDp940.display);
+  face.querySelector('.st-aux').setAttribute('style', ddin ? DDIN.at(DDIN.aux) : frontDp940.aux);
+  document.documentElement.style.setProperty('--face-ratio', ddin ? (DDIN.w / DDIN.h).toFixed(4) : '3.7124');
+  if (disp) disp.destroy();
+  disp = null;
+  if (ddin) disp = new Deck90DoubleDin(el('stDisplay'), { attackMs: 35, releaseMs: 140 });
+  else if (typeof Deck90Display === 'function') {
+    disp = new Deck90Display(el('stDisplay'), { attackMs: 35, releaseMs: 140 });
+    disp.svg.removeAttribute('width'); disp.svg.removeAttribute('height');
+  }
+  if (disp) {
+    const svg = disp.svg;                                         // the DP940's: only its glass, over the photo's own LCD
+    if (!ddin) svg.setAttribute('viewBox', '23 24 1141 156');
+    svg.setAttribute('preserveAspectRatio', 'none');
+  }
+  read.last = '';
+}
 
 // ═══ the display as on the PC (src/ui/stereo/stereo.js): SDM its colour, six lights and then whole looks (each its
 // own glass, letters and meters; three change the whole front), held the one before; HDB four brightnesses; DISP
@@ -111,7 +145,7 @@ const STEREO_LOOKS = [
 const STEREO_COLORS = STEREO_HUES.length + STEREO_LOOKS.length;
 const STEREO_DISP = ['song', 'clock', 'temp', 'clocktemp', 'time'];
 const STEREO_DISP_NAME = { song: 'NORMAL', clock: 'HORA', temp: 'TEMPERATURA', clocktemp: 'HORA Y TEMPERATURA', time: 'TIEMPO' };
-const look = { color: 1, dimI: 0, disp: 'song' };
+const look = { color: 1, dimI: 0, disp: 'song', front: 'dp940' };
 try { Object.assign(look, JSON.parse(localStorage.getItem('deck90-face') || '{}')); } catch (_) {}
 if (!(look.color >= 1 && look.color <= STEREO_COLORS)) look.color = 1;
 if (!(look.dimI >= 0 && look.dimI < STEREO_DIM.length)) look.dimI = 0;
@@ -128,6 +162,7 @@ function lookApply() {
   try { localStorage.setItem('deck90-face', JSON.stringify(look)); } catch (_) {}
 }
 lookApply();
+frontApply();
 if (/temp/.test(look.disp)) setTimeout(() => app.key('weather', false), 1500);   // DISP left on the temperature
 
 function key(k, hold) {
@@ -136,6 +171,11 @@ function key(k, hold) {
     look.color = (look.color - 1 + (hold ? STEREO_COLORS - 1 : 1)) % STEREO_COLORS + 1; lookApply();
     const lk = stereoLook();
     toast('SDM ' + look.color + '/' + STEREO_COLORS + ' · ' + (lk ? lk.name + ': ' + lk.say : 'COLOR ' + look.color), lk ? 2000 : 1200);
+    return;
+  }
+  if (k === 'hdb' && hold) {                                      // 0.1.14: held, the other front
+    look.front = look.front === 'ddin' ? 'dp940' : 'ddin'; lookApply(); frontApply(); read();
+    toast('FRENTE · ' + (look.front === 'ddin' ? 'DOBLE DIN' : 'DP940') + ' · HDB apretado: el otro', 2000);
     return;
   }
   if (k === 'hdb') { look.dimI = (look.dimI + 1) % STEREO_DIM.length; lookApply(); toast('HDB · brillo ' + STEREO_DIM_NAME[look.dimI], 1200); return; }
@@ -160,7 +200,7 @@ function key(k, hold) {
       volT = setTimeout(function rep() { key(k); volT = setTimeout(rep, 100); }, 350);
       return;
     }
-    if (/^(m[1-6]|sdm|band|scan|pwr|loc|mode)$/.test(k)) holdT = setTimeout(() => { held = true; key(k, true); }, 1000);
+    if (/^(m[1-6]|sdm|band|scan|pwr|loc|mode|hdb)$/.test(k)) holdT = setTimeout(() => { held = true; key(k, true); }, 1000);
   });
   const up = () => { clearTimeout(holdT); clearTimeout(volT); face.querySelectorAll('.st-hot.down').forEach(b => b.classList.remove('down')); };
   ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => face.addEventListener(ev, up));
@@ -270,6 +310,7 @@ function context(s) {
 // line only rewrites that line, and a new corner (quality, SLEEP) only the footer: the meters never stumble
 function dispRadio(radio) {
   if (disp.state.mode !== 'radio') disp.setPlayback(false);
+  if (ddin) { disp.setRadio(radio); return; }                       // the double DIN redraws only what changed
   const was = disp.state.radio, text = v => String(v ?? '').replace(/[\u0000-\u001f]/g, ' ').slice(0, 512);
   const preset = Math.max(1, Math.min(99, Math.trunc(Number(radio.preset) || 1)));
   const same = was.band === text(radio.band) && was.frequency === text(radio.frequency) && was.preset === preset &&
@@ -342,6 +383,12 @@ function usbNow(s, u) {
   el('nowSong').textContent = s.error ? 'Enchufá el pendrive y tocá ▶' : [u.artist, u.album || u.discName].filter(Boolean).join(' · ');
   const q = el('nowQ'); q.textContent = (/FLAC|ALAC|WAV/.test(s.quality || '') ? 'HI-FI · ' : '') + (s.quality || ''); q.classList.toggle('hifi', /FLAC|ALAC|WAV/.test(s.quality || ''));
 }
+// 0.1.14: on the double DIN the artist alone on the first dot line, and under it the album, its year and the place
+function ddTrack(track, s, u) {
+  if (!track.disc || !u.artist) return;
+  track.artist = u.artist + (s.playing ? '' : ' · PAUSE') + (u.rand ? ' · RAND' : '') + (u.rep === 1 ? ' · REP' : u.rep === 2 ? ' · REP 1' : '');
+  track.album = [u.album || u.discName, u.year, u.total > 1 ? u.n + '/' + u.total : ''].filter(Boolean).join(' · ');
+}
 function read() {
   let s;
   try { s = JSON.parse(app.state()); } catch (_) { return; }
@@ -349,15 +396,19 @@ function read() {
   // PWR (or SLEEP's end): GOOD BYE a moment, then the front goes dark; HELLO when it comes on
   const greet = s.greet || '', live = !!s.playing && !greet, extra = dispText(s), off = s.power === false && !greet;
   const trouble = s.error === 'RECONNECT' ? 'RECONNECTING…' : s.error ? 'NO SIGNAL' : s.buffering ? 'TUNING…' : '';
-  const line = trouble || (!live ? '' : s.song && Math.floor(Date.now() / 4000) % 3 !== 2 ? s.song : s.station || '');
+  const line = trouble || (!live ? '' : ddin ? s.song || s.station || '' : s.song && Math.floor(Date.now() / 4000) % 3 !== 2 ? s.song : s.station || '');
+  // 0.1.14: the double DIN's second line: the station (when the song is above) and where it is
+  const line2 = ddin && live ? [s.song || trouble ? s.station : '', s.town || '', s.cc || ''].filter(Boolean).join(' · ') : '';
   // SLEEP: the minutes left take turns with the quality, in its corner of the display
   const corner = s.sleep > 0 && Math.floor(Date.now() / 4000) % 2 ? 'SLEEP ' + s.sleep : live ? s.quality || '' : '';
   const u = s.mode === 'usb' && s.usb || s.mode === 'cd' && s.cd || s.mode === 'server' && s.jf, usbOn = !!u && !greet;
   const radio = greet ? { band: '', frequency: greet, preset: s.slot || 1, live: false, name: '', mono: false, local: false, quality: '' }
     : extra
     ? { band: '', frequency: extra, preset: s.slot || 1, live, name: context(s), mono: !!s.mono, local: s.band === 'LOCAL' && !s.tuned, quality: corner }
-    : { band: s.memo ? 'A.MEM' : s.tuned ? '' : s.band, frequency: s.freq || shortName(s.station).toUpperCase(), preset: s.slot || 1, live, name: line, mono: !!s.mono, local: s.band === 'LOCAL' && !s.tuned, quality: corner };
+    : { band: s.memo ? 'A.MEM' : s.tuned ? '' : s.band, frequency: s.freq || shortName(s.station).toUpperCase(), preset: s.slot || 1, live, name: line, line2, mono: !!s.mono, local: s.band === 'LOCAL' && !s.tuned, quality: corner };
   const track = usbOn ? (s.mode === 'cd' ? cdTrack(s, u, extra) : s.mode === 'server' ? jfTrack(s, u, extra) : usbTrack(s, u, extra)) : null;
+  if (track && ddin) ddTrack(track, s, u);
+  if (ddin && disp) { const t = new Date(); disp.setClock(two(t.getHours()) + ':' + two(t.getMinutes())); disp.setTemp(wxTemp(s)); }
   const key = JSON.stringify([track || radio, off, s.memories, s.scan, s.slot, s.band, s.mode]);
   face.classList.toggle('off', off);
   el('stereoView').classList.toggle('aux-on', live);
@@ -446,6 +497,21 @@ const vu = { l: -20, r: -20, ref: -22, peakL: 0, peakR: 0 };
 const SB = 28, BARS = 14;                                          // measured in 28 bands, shown as 14 wide bars (each the louder of two)
 const sp = { bar: new Float32Array(BARS), peak: new Float32Array(BARS), hold: new Float32Array(BARS), top: -24 };
 const fc = k => 40 * Math.pow(400, (k + .5) / SB);                 // a band's middle: 40 Hz × 400^…, up to 16 kHz
+// 0.1.14: the double DIN's twenty bands from the app's 28 (each the louder of its share), +3 dB an octave, around
+// a top that follows the music
+const dd = { top: -24, out: new Float32Array(20) };
+function ddSpectrum(str, dt) {
+  const vals = str ? str.split(',').map(Number) : [];
+  if (vals.length !== SB) return null;
+  const fine = vals.map((v, k) => v + 3 * Math.log2(fc(k) / 1000));
+  for (let b = 0; b < 20; b++) {
+    let m = -140; for (let k = Math.floor(b * SB / 20); k < Math.max(Math.floor(b * SB / 20) + 1, Math.floor((b + 1) * SB / 20)); k++) m = Math.max(m, fine[k]);
+    dd.out[b] = m;
+  }
+  const mx = Math.max(...dd.out); if (mx > -80) dd.top += (Math.min(0, mx + 3) - dd.top) * (1 - Math.exp(-dt / 3000));
+  for (let b = 0; b < 20; b++) dd.out[b] = Math.max(0, Math.min(1, (dd.out[b] - (dd.top - 44)) / 44));
+  return dd.out;
+}
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = at ? Math.min(200, now - at) : 16; at = now;
@@ -456,6 +522,7 @@ function frame(now) {
     if (loud > -60) avg += (loud - avg) * (1 - Math.exp(-dt / 2500));
     const f = d => d < -60 ? 0 : Math.max(0, Math.min(1, (d - (avg - 8)) / 13));
     disp.setLevels(f(dl), f(dr));
+    if (ddin) disp.setSpectrum(on ? ddSpectrum(String(app.spectrum ? app.spectrum() : ''), dt) : null);
   }
   if (mode === 'radio') return;
   const d = Math.min(2, window.devicePixelRatio || 1);           // 2× is sharp on a phone; more only costs frames
