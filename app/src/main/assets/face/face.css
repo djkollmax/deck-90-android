@@ -145,6 +145,10 @@ body:is([data-view=vu], [data-view=spec]) :is(.pad-bands, .pad-mems) { display: 
   .pad-mems { grid-template: repeat(2, minmax(44px, 1fr)) / repeat(6, minmax(0, 1fr)); }
   .stereo .st-face { width: min(100%, 30vh * 3.7124); }           /* the face leaves room for the keys */
   .stereo .st-face[data-front=ddin] { width: min(100%, 44vh * 1.8); } /* 0.1.14: the double DIN, taller */
+  /* 0.1.16: VU and ESPECTRO under the double DIN: its display already says the song, so the line under it goes and the
+     face gives a little, for meters twice as tall */
+  body[data-front=ddin]:is([data-view=vu], [data-view=spec]) .now { display: none; }
+  body[data-front=ddin]:is([data-view=vu], [data-view=spec]) .stereo .st-face[data-front=ddin] { width: min(100%, 38vh * 1.8); }
   .pad-views { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .pad-views [data-v=stereo] { display: block; }
   /* ESTÉREO: the face alone, as big as the screen allows */

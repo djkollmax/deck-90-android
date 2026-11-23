@@ -38,6 +38,9 @@ data class JfSong(val id: String, val name: String, val artist: String, val albu
 object Jf : MusicLib {
     private const val PREFS = "jellyfin"
     @Volatile var server = ""; private set
+    // 0.1.16: the server's other address (its home one, as Jellyfin says it: LocalAddress), tried when the one in use
+    // doesn't answer (Tailscale asleep at home, or the home address away from it); the one that answers is kept
+    @Volatile var alt = ""; private set
     @Volatile var user = ""; private set                             // the user's id
     @Volatile var name = ""; private set                             // the user's name, as Jellyfin says it
     @Volatile private var token = ""
@@ -62,6 +65,7 @@ object Jf : MusicLib {
         val p = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         server = p.getString("server", "") ?: ""; user = p.getString("user", "") ?: ""; name = p.getString("name", "") ?: ""
         token = p.getString("token", "") ?: ""
+        alt = p.getString("alt", "") ?: ""
         device = p.getString("device", "") ?: ""
         if (device.isEmpty()) { device = "deck90-android-" + UUID.randomUUID().toString().take(12); p.edit().putString("device", device).apply() }
         runCatching {
@@ -74,7 +78,7 @@ object Jf : MusicLib {
     }
     private fun cache() = File(app.filesDir, "jellyfin-library.json")
     private fun save() { if (::app.isInitialized) app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-        .putString("server", server).putString("user", user).putString("name", name).putString("token", token).apply() }
+        .putString("server", server).putString("user", user).putString("name", name).putString("token", token).putString("alt", alt).apply() }
 
     // "http://192.168.0.199:8096", "100.101.102.103:8096", "musica.casa.com": an address Jellyfin answers on
     fun clean(s: String): String {
@@ -91,18 +95,50 @@ object Jf : MusicLib {
     class Answered(val code: Int) : IOException("HTTP $code")          // the server answered, with an error
 
     // 0.1.15: how long a question waits for the connection, and before it's asked again (tests shorten them)
-    @Volatile var connectMs = 8000
+    @Volatile var connectMs = 6000
     @Volatile var againMs = 1500L
 
     private fun call(method: String, path: String, query: Map<String, Any?> = emptyMap(), body: JSONObject? = null, withToken: Boolean = true,
                      base: String = server, wait: Int = 20_000): Any? {
         // 0.1.15: no answer at all: asked once more (a question that changes something, only when it never reached the server)
-        return try { ask(method, path, query, body, withToken, base, wait) }
-        catch (e: IOException) {
+        return try {
+            try { ask(method, path, query, body, withToken, base, wait) }
+            catch (e: IOException) {
+                // 0.1.16: the address in use not reached: the other one, kept if it answers
+                val other = alt
+                if (!unreached(e) || base != server || other.isEmpty() || other == base) throw e
+                ask(method, path, query, body, withToken, other, wait).also { swap(base, other) }
+            }
+        } catch (e: IOException) {
             if (e is Unauthorized || e is Answered || (method != "GET" && e !is java.net.ConnectException && e !is java.net.UnknownHostException)) throw e
             Thread.sleep(againMs)
             ask(method, path, query, body, withToken, base, wait)
         }.also { if (withToken && base == server && error.isNotEmpty() && error != "signed out") { error = ""; Now.changed() } }   // it answers again
+    }
+    // the connection never made (no answer at the address), not a server that answered slowly or with an error
+    fun unreached(e: Exception) = e is java.net.ConnectException || e is java.net.NoRouteToHostException || e is java.net.UnknownHostException ||
+        (e is java.net.SocketTimeoutException && (e.message ?: "").contains("connect", ignoreCase = true))
+    private fun swap(was: String, now: String) {
+        synchronized(this) { if (server != was) return; server = now; alt = was }
+        save(); Now.changed()
+    }
+    // 0.1.16: the server's home address, from the server itself (its public info: no sign-in needed). Blocking, quiet
+    fun learn() {
+        if (server.isEmpty()) return
+        runCatching {
+            val o = ask("GET", "/System/Info/Public", emptyMap(), null, false, server, 8000) as? JSONObject ?: return
+            val home = clean(o.optString("LocalAddress"))
+            if (home.isNotEmpty() && home != server && home != alt) { alt = home; save() }
+        }
+    }
+    // 0.1.16: whether the server answers at its address or the other one (switching to it); for the player's retries
+    fun reach(): Boolean {
+        if (server.isEmpty()) return false
+        for (a in listOf(server, alt).filter { it.isNotEmpty() }.distinct()) {
+            val ok = runCatching { ask("GET", "/System/Info/Public", emptyMap(), null, false, a, 8000) }.isSuccess
+            if (ok) { if (a != server) swap(server, a); return true }
+        }
+        return false
     }
     private fun ask(method: String, path: String, query: Map<String, Any?>, body: JSONObject?, withToken: Boolean, base: String, wait: Int): Any? {
         val q = query.filterValues { it != null && it.toString().isNotEmpty() }.entries
@@ -127,7 +163,8 @@ object Jf : MusicLib {
     // what to tell the person when the server doesn't answer, in their words
     fun why(e: Exception, s: String = server): String = when (e) {
         is Unauthorized -> "el servidor ya no te reconoce"
-        is java.net.SocketTimeoutException -> "no contesta $s: ¿el celular está en la misma red o en Tailscale?"
+        is java.net.SocketTimeoutException -> if (unreached(e)) "no contesta $s: ¿Tailscale está prendido en el celular, o está en el Wi-Fi de casa?"
+            else "$s tarda demasiado en contestar: probá de nuevo en un rato"
         is java.net.UnknownHostException -> "no encuentro $s: ¿el celular tiene red?"
         is java.net.ConnectException, is java.net.NoRouteToHostException -> "no contesta $s: ¿está prendido el servidor?"
         is Answered -> if (e.code >= 500) "el servidor tuvo un problema (HTTP ${e.code}): probá de nuevo en un rato" else "el servidor no lo tiene (HTTP ${e.code})"
@@ -144,9 +181,11 @@ object Jf : MusicLib {
                 withToken = false, base = s, wait = 30_000) as? JSONObject ?: return "El servidor no contestó como Jellyfin"
             val t = r.optString("AccessToken"); val u = r.optJSONObject("User")
             if (t.isEmpty() || u == null) return "El servidor no contestó como Jellyfin"
+            if (s != server) alt = ""
             server = s; token = t; user = u.optString("Id"); name = u.optString("Name").ifEmpty { userName }
             albums = emptyList(); artists = emptyList(); readAt = 0; songs.clear(); byId.clear(); error = ""
             save(); runCatching { cache().delete() }
+            learn()
             Now.changed()
             ""
         } catch (e: Unauthorized) { "Usuario o contraseña incorrectos" }
@@ -216,6 +255,7 @@ object Jf : MusicLib {
             val ar = all("/Artists/AlbumArtists", mapOf("UserId" to user, "SortBy" to "SortName"))
                 .map { JfArtist(it.optString("Id"), it.optString("Name").ifEmpty { "?" }) }
             albums = al.sortedBy { sortKey(it.name) }; artists = ar.sortedBy { sortKey(it.name) }; readAt = System.currentTimeMillis(); error = ""
+            learn()
             runCatching { cache().writeText(JSONObject().put("server", server).put("user", user).put("at", readAt)
                 .put("albums", JSONArray(albums.map { JSONArray().put(it.id).put(it.name).put(it.artist).put(it.year).put(it.artistId) }))
                 .put("artists", JSONArray(artists.map { JSONArray().put(it.id).put(it.name) })).toString()) }

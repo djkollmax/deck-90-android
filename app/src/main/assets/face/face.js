@@ -86,6 +86,7 @@ const frontDp940 = { display: el('stDisplay').getAttribute('style'), aux: face.q
 function frontApply() {
   ddin = look.front === 'ddin' && typeof Deck90DoubleDin === 'function';
   face.dataset.front = ddin ? 'ddin' : 'dp940';
+  document.body.dataset.front = face.dataset.front;                // 0.1.16: the layout around it (face.css)
   face.querySelector('.st-photo').src = ddin ? DDIN.img : 'img/front.jpg';
   el('stDisplay').setAttribute('style', ddin ? DDIN.at(DDIN.display) : frontDp940.display);
   face.querySelector('.st-aux').setAttribute('style', ddin ? DDIN.at(DDIN.aux) : frontDp940.aux);

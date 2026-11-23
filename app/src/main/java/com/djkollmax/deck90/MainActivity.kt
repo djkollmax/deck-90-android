@@ -635,7 +635,10 @@ class MainActivity : AppCompatActivity() {
         val lib = if (kind == "artist" || kind == "album") Music.of(id) else Music.now()
         val f0 = lib.fails                                           // 0.1.15: only this list's own failure is told
         try {
-            if (kind != "home" && kind != "search" && kind != "queue") lib.read()
+            // 0.1.16: the library read first only when there's none yet; otherwise the lists answer from what's kept and
+            // it's read again behind (an album's songs used to wait for the whole library to be read again)
+            if (kind in setOf("albums", "artists", "search") && lib.albums.isEmpty()) lib.read()
+            else if (kind != "queue") Thread { lib.read() }.start()
             val items: List<JSONObject> = when (kind) {
                 "home" -> { lib.read(force = System.currentTimeMillis() - lib.readAt > 30 * 60_000L); emptyList() }   // 0.1.10: what's new, every half hour
                 "albums" -> lib.albums.map(album)
@@ -644,12 +647,12 @@ class MainActivity : AppCompatActivity() {
                 "album" -> lib.songsOf(id).mapIndexed { i, x -> song(x, i) }.also { o.put("title", lib.albums.firstOrNull { a -> a.id == id }?.name ?: lib.songsOf(id).firstOrNull()?.album ?: "") }
                 "recent" -> lib.recent().map(album)
                 "queue" -> onMain { jfQueue(controller) }.mapIndexed { i, x -> song(x, i) }   // 0.1.11: the player only answers on the main thread
-                "search" -> { lib.read(); val (ar, al, so) = lib.search(text)
+                "search" -> { val (ar, al, so) = lib.search(text)
                     ar.map { JSONObject().put("t", "artist").put("id", it.id).put("name", it.name) } + al.map(album) + so.mapIndexed { i, x -> song(x, i).put("t", "found") } }
                 else -> emptyList()
             }
             o.put("items", JSONArray(items)).put("albums", lib.albums.size).put("artists", lib.artists.size).put("tel", Music.tel)
-                .put("error", if (!lib.ready && !Music.tel) "signed out" else if (lib.fails != f0) lib.error else "")
+                .put("error", if (!lib.ready && !Music.tel) "signed out" else if (lib.fails != f0 && items.isEmpty()) lib.error else "")
         } catch (e: Exception) { o.put("items", JSONArray()).put("error", if (lib === Jf) Jf.why(e) else e.message ?: "error") }
         main.post { web.evaluateJavascript("window.faceJfList&&faceJfList($req,$o)", null) }
     }.start()

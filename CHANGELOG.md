@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.16
+
+- SERVER: `Jf.alt`, the server's other address, learnt from `/System/Info/Public`'s `LocalAddress` after signing in
+  and after each library reading (kept with the token). A request whose connection is never made (refused, no route,
+  connect timeout: `Jf.unreached`) is tried at `alt`, and when that answers the two swap (`swap`), so the player's
+  addresses follow. The player's no-answer path asks `Jf.reach()` before it retries. Connect timeout 6 s.
+- `jfList` no longer blocks on `lib.read()` when a library is kept: it reads again in the background; only an empty
+  list carries an error. `Jf.why()` tells a connection that never came (Tailscale asleep, not home) from a server
+  that answered too slowly.
+- Face: `body[data-front]` mirrors the stereo's front; a tablet lying down with the double DIN, in VU or ESPECTRO, hides
+  the song line and gives the face 38vh, doubling the meters' height.
+- Tests: the home address taken over when the one in use stops answering.
+
 ## 0.1.15
 
 - SERVER: the token goes in the `Authorization: MediaBrowser … Token=` header only (no `X-Emby-Authorization`), and

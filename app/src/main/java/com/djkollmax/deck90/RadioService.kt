@@ -215,7 +215,7 @@ class RadioService : MediaLibraryService() {
                         }.start(); return }
                         http != null && jfSkips < 3 && player.hasNextMediaItem() -> { jfSkips++; Now.error = ""; player.seekToNextMediaItem(); player.prepare(); player.play() }
                         // 0.1.12: no answer (the Wi-Fi went, the server rebooting): tried again, the song from where it was
-                        Jf.signedIn -> { reconnect(item.mediaId, player.currentMediaItemIndex); return }
+                        Jf.signedIn -> { Thread { Jf.reach() }.start(); reconnect(item.mediaId, player.currentMediaItemIndex); return }   // 0.1.16: or its other address
                         else -> Now.error = "SIGN IN"
                     }
                     Now.changed(); return

@@ -1,5 +1,19 @@
 # Novedades
 
+## 0.1.16 — 2026-11-22
+
+### Arreglado
+- **SERVER sin Tailscale:** la app aprende la dirección de casa de tu Jellyfin (se la da el mismo servidor) y, si la de
+  Tailscale no contesta (por ejemplo, porque la tablet se reinició y Tailscale no arrancó), prueba sola por la de casa
+  y se queda con la que ande. Lo mismo al revés, fuera de casa. También los temas que estaban sonando.
+- **Los temas de un disco ya no esperan a que se relea toda la biblioteca:** las listas salen de lo guardado y la
+  biblioteca se actualiza atrás. El aviso dice si el servidor no contesta (¿Tailscale está prendido?) o si contesta
+  pero tarda demasiado.
+
+### Mejor
+- **Doble DIN con la tablet acostada:** en VU y ESPECTRO los medidores tienen el doble de alto. Como el display ya dice
+  el tema, el renglón de abajo se va y el frente se achica un poco.
+
 ## 0.1.15 — 2026-11-22
 
 ### Arreglado

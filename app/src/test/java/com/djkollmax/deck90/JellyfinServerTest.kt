@@ -19,6 +19,8 @@ class JellyfinServerTest {
     private val drop = AtomicInteger(0)                                     // connections to cut before answering
     @Volatile private var down = false                                      // answer 500 to everything
     @Volatile private var revoked = false                                   // the token no longer taken
+    @Volatile private var home = ""                                         // the LocalAddress the server tells
+    private val others = mutableListOf<ServerSocket>()
 
     private val albums = """{"Items":[
         {"Id":"a1","Name":"Immunity","AlbumArtist":"Jon Hopkins","ProductionYear":2013,"AlbumArtists":[{"Id":"r1","Name":"Jon Hopkins"}]},
@@ -46,6 +48,7 @@ class JellyfinServerTest {
         val auth = headers["authorization"].orEmpty()
         val (code, body) = when {
             down -> 500 to ""
+            path == "/System/Info/Public" -> 200 to """{"ServerName":"max-3090","LocalAddress":"$home","Version":"10.11.3"}"""
             path == "/Users/AuthenticateByName" -> {
                 if (String(sent).contains("\"Pw\":\"bien\"")) 200 to """{"AccessToken":"tok123","User":{"Id":"u1","Name":"Damián"}}""" else 401 to ""
             }
@@ -65,12 +68,32 @@ class JellyfinServerTest {
     }
 
     @Before fun start() {
-        http = ServerSocket(0, 50, java.net.InetAddress.getByName("127.0.0.1"))
-        Thread { while (!http.isClosed) { val c = runCatching { http.accept() }.getOrNull() ?: break; Thread { runCatching { answer(c) } }.start() } }.apply { isDaemon = true }.start()
+        http = listen()
         base = "127.0.0.1:" + http.localPort
         Jf.connectMs = 2000; Jf.againMs = 50
     }
-    @After fun stop() { http.close() }
+    // the same pretend server at another address (its home one)
+    private fun listen(): ServerSocket = ServerSocket(0, 50, java.net.InetAddress.getByName("127.0.0.1")).also { sock ->
+        Thread { while (!sock.isClosed) { val c = runCatching { sock.accept() }.getOrNull() ?: break; Thread { runCatching { answer(c) } }.start() } }.apply { isDaemon = true }.start()
+    }
+    @After fun stop() { http.close(); others.forEach { it.close() }; home = "" }
+
+    // 0.1.16: Tailscale asleep (the address in use doesn't answer): the home address the server told is tried, and kept
+    @Test fun `the server's other address when the one in use doesn't answer`() {
+        val other = listen().also { others += it }
+        home = "http://127.0.0.1:" + other.localPort
+        signedIn()
+        assertEquals(home, Jf.alt)
+        Jf.read(force = true)
+        http.close()                                                           // the address signed in with: gone
+        // (the JDK may keep listening until its accept thread wakes: wait until the port really refuses)
+        repeat(50) { if (runCatching { Socket("127.0.0.1", http.localPort).close() }.isFailure) return@repeat; Thread.sleep(50) }
+        val was = Jf.server
+        assertEquals(2, Jf.songsOf("a1").size)
+        assertEquals("was $was", home, Jf.server); assertEquals("http://$base", Jf.alt)
+        assertTrue(Jf.stream("b1").startsWith(home + "/Audio/b1/"))
+        assertTrue(Jf.reach())
+    }
 
     private fun signedIn() { assertEquals("", Jf.signIn(base, "damian", "bien")); synchronized(seen) { seen.clear() } }
 
@@ -90,7 +113,7 @@ class JellyfinServerTest {
         assertTrue(Jf.read(force = true))
         synchronized(seen) {
             assertTrue(seen.isNotEmpty())
-            for ((path, h) in seen) {
+            for ((path, h) in seen.filter { it.first != "/System/Info/Public" }) {   // public: no sign-in
                 assertTrue(path, h["authorization"].orEmpty().contains("Token=\"tok123\""))
                 assertFalse(path, h.containsKey("x-emby-authorization") || h.containsKey("x-emby-token"))
             }
