@@ -1,5 +1,11 @@
 # Novedades
 
+## 0.1.18 — 2026-11-22
+
+### Mejor
+- **El frente del doble DIN, redibujado** (el de la PC 7.10.33): botones con más profundidad y brillo, letras nítidas.
+  Las teclas quedan en el mismo lugar.
+
 ## 0.1.17 — 2026-11-22
 
 ### Arreglado

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.18
+
+- Face synced from deck-90 7.10.33: the redrawn double-DIN photo (`img/front-ddin.jpg`, same size and key places).
+
 ## 0.1.17
 
 - The lists' home took its counts from the last state, which could still be the other source's right after SOURCE
