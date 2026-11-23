@@ -802,7 +802,8 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface fun jfList(req: Int, kind: String, id: String, text: String) { this@MainActivity.jfList(req, kind, id, text) }
         @JavascriptInterface fun jfPlay(kind: String, id: String, index: Int) { this@MainActivity.jfPlay(kind, id, index) }
         @JavascriptInterface fun jfServer(): String = JSONObject().put("server", Jf.server.ifEmpty { "" }).put("name", Jf.name).put("signedIn", Jf.signedIn)
-            .put("source", Music.source).put("ready", Music.now().ready).put("songs", if (Music.tel) Tel.albums.size else Jf.albums.size).toString()
+            .put("source", Music.source).put("ready", Music.now().ready).put("songs", if (Music.tel) Tel.albums.size else Jf.albums.size)
+            .put("albums", Music.now().albums.size).put("artists", Music.now().artists.size).put("reading", Music.now().reading).toString()   // 0.1.17: the source's own counts
         // 0.1.10: SOURCE from the face's tabs: "srv", "tel" or "usb"
         @JavascriptInterface fun jfSource(src: String) { main.post { sourceSet(src) } }
         // the answer comes back as faceFound(list), or faceFound(null) when Radio Browser didn't answer

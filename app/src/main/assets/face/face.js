@@ -39,7 +39,8 @@ const app = window.Deck90Android || {                              // a browser:
   spectrum: () => { const t = Date.now() / 400; return Array.from({ length: 28 }, (_, k) => (-28 - k * 0.9 + 8 * Math.sin(t + k * .7)).toFixed(1)).join(','); },
   discs: () => JSON.stringify(Array.from({ length: 9 }, (_, i) => ({ d: i + 1, name: ['Abbey Road', 'Kind of Blue', 'Rumours', 'Artaud', 'Clics Modernos', 'Discovery', 'Random Access Memories', 'Thriller', 'Nevermind'][i], songs: 9 + i }))),
   // SERVER, for a look in a browser: a small pretend library
-  jfServer: () => JSON.stringify({ server: 'http://192.168.0.199:8096', name: 'Damián', signedIn: !!window.jfDemo, source: window.jfDemoSrc || 'srv', ready: window.jfDemoSrc === 'tel' || !!window.jfDemo }),
+  jfServer: () => JSON.stringify({ server: 'http://192.168.0.199:8096', name: 'Damián', signedIn: !!window.jfDemo, source: window.jfDemoSrc || 'srv', ready: window.jfDemoSrc === 'tel' || !!window.jfDemo,
+    albums: window.jfDemoSrc === 'tel' ? 37 : 1415, artists: window.jfDemoSrc === 'tel' ? 21 : 840, reading: false }),
   jfSignIn: (a, u) => setTimeout(() => { window.jfDemo = true; faceJf('signed', { name: u, albums: 1402 }); }, 300),
   jfSignOut: () => { window.jfDemo = false; },
   jfPlay: () => {},
@@ -884,7 +885,8 @@ function jfShow(on) { el('jfBox').classList.toggle('show', on); if (!on) el('jfF
 function jfServer() { try { return JSON.parse(app.jfServer ? app.jfServer() : '{}'); } catch (_) { return {}; } }
 function jfHome() {
   jf.stack = []; el('jfFind').value = '';
-  const j = view.jf || {}, who = jfServer(), tel = who.source === 'tel';
+  // 0.1.17: the counts asked now, of the source shown (the last state could still be the other source's, just changed)
+  const who = jfServer(), tel = who.source === 'tel', j = Object.assign({}, view.jf, who.albums != null ? { albums: who.albums, artists: who.artists, reading: who.reading } : {});
   jfSrcPaint(who);
   jfView({ kind: 'home', title: tel ? 'MÚSICA · TELÉFONO' : 'MÚSICA' + (who.name ? ' · ' + who.name.toUpperCase() : '') });
   if (!who.ready && who.source) {                                   // 0.1.10: the source isn't ready: what it needs

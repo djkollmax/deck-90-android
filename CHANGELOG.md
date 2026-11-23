@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.17
+
+- The lists' home took its counts from the last state, which could still be the other source's right after SOURCE
+  changed (TEL showed the server's 1415 albums). `jfServer()` now gives the shown source's albums, artists and
+  reading, and `jfHome` uses them.
+
 ## 0.1.16
 
 - SERVER: `Jf.alt`, the server's other address, learnt from `/System/Info/Public`'s `LocalAddress` after signing in

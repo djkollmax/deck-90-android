@@ -1,5 +1,11 @@
 # Novedades
 
+## 0.1.17 — 2026-11-22
+
+### Arreglado
+- **TELÉFONO mostraba los números del servidor** (cuántos discos y artistas) justo al cambiar de pestaña. Las listas ya
+  eran las del teléfono; ahora los números también.
+
 ## 0.1.16 — 2026-11-22
 
 ### Arreglado
