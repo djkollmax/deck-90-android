@@ -23,8 +23,14 @@ import java.util.UUID
 //  player's resolver (RadioService.Resolver) turns into the server's address with the token: the token never goes
 //  in what the car or the notification see. Jellyfin decides per song: the file as it is when the phone plays its
 //  format (FLAC, MP3, AAC, Opus, Vorbis, WAV), or made FLAC on the server when it doesn't (ALAC, WMA, APE, DSD…).
+//  0.1.15: the token goes in the Authorization header (and ApiKey for a song's address): Jellyfin 12 turned the old
+//  api_key and X-Emby-Authorization off. A question that gets no answer is asked once more (the Wi-Fi waking up, a
+//  connection the phone kept that the network dropped); a list says what went wrong with it, not with an older one.
 // ═══════════════════════════════════════
-data class JfAlbum(val id: String, val name: String, val artist: String, val year: Int, val artistId: String = "")
+// artistId: the album's artists' ids, "id1,id2" (0.1.15: an album of two artists is under both)
+data class JfAlbum(val id: String, val name: String, val artist: String, val year: Int, val artistId: String = "") {
+    fun by(artist: String) = artistId == artist || artistId.split(',').contains(artist)
+}
 data class JfArtist(val id: String, val name: String)
 data class JfSong(val id: String, val name: String, val artist: String, val album: String, val albumId: String,
     val n: Int, val disc: Int, val len: Int, val codec: String = "", val kbps: Int = 0, val rate: Int = 0, val bits: Int = 0)
@@ -41,6 +47,7 @@ object Jf : MusicLib {
     @Volatile override var readAt = 0L; private set                           // when the library was last read
     @Volatile override var reading = false; private set
     @Volatile override var error = ""; private set
+    @Volatile override var fails = 0; private set                    // 0.1.15: failures so far, so a list knows whether it had one
     private val songs = java.util.concurrent.ConcurrentHashMap<String, List<JfSong>>()   // album id → its songs
     private val byId = java.util.concurrent.ConcurrentHashMap<String, JfSong>()
     @Volatile private var loaded = false
@@ -66,8 +73,8 @@ object Jf : MusicLib {
         }
     }
     private fun cache() = File(app.filesDir, "jellyfin-library.json")
-    private fun save() = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-        .putString("server", server).putString("user", user).putString("name", name).putString("token", token).apply()
+    private fun save() { if (::app.isInitialized) app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+        .putString("server", server).putString("user", user).putString("name", name).putString("token", token).apply() }
 
     // "http://192.168.0.199:8096", "100.101.102.103:8096", "musica.casa.com": an address Jellyfin answers on
     fun clean(s: String): String {
@@ -81,22 +88,51 @@ object Jf : MusicLib {
         BuildConfigInfo.version + "\"" + (if (withToken && token.isNotEmpty()) ", Token=\"$token\"" else "")
 
     class Unauthorized : IOException("unauthorized")
+    class Answered(val code: Int) : IOException("HTTP $code")          // the server answered, with an error
+
+    // 0.1.15: how long a question waits for the connection, and before it's asked again (tests shorten them)
+    @Volatile var connectMs = 8000
+    @Volatile var againMs = 1500L
 
     private fun call(method: String, path: String, query: Map<String, Any?> = emptyMap(), body: JSONObject? = null, withToken: Boolean = true,
                      base: String = server, wait: Int = 20_000): Any? {
+        // 0.1.15: no answer at all: asked once more (a question that changes something, only when it never reached the server)
+        return try { ask(method, path, query, body, withToken, base, wait) }
+        catch (e: IOException) {
+            if (e is Unauthorized || e is Answered || (method != "GET" && e !is java.net.ConnectException && e !is java.net.UnknownHostException)) throw e
+            Thread.sleep(againMs)
+            ask(method, path, query, body, withToken, base, wait)
+        }.also { if (withToken && base == server && error.isNotEmpty() && error != "signed out") { error = ""; Now.changed() } }   // it answers again
+    }
+    private fun ask(method: String, path: String, query: Map<String, Any?>, body: JSONObject?, withToken: Boolean, base: String, wait: Int): Any? {
         val q = query.filterValues { it != null && it.toString().isNotEmpty() }.entries
             .joinToString("&") { URLEncoder.encode(it.key, "UTF-8") + "=" + URLEncoder.encode(it.value.toString(), "UTF-8") }
         val c = URL(base + path + (if (q.isNotEmpty()) "?$q" else "")).openConnection() as HttpURLConnection
-        c.requestMethod = method; c.connectTimeout = 8000; c.readTimeout = wait
-        c.setRequestProperty("Authorization", auth(withToken)); c.setRequestProperty("X-Emby-Authorization", auth(withToken))
-        c.setRequestProperty("Accept", "application/json")
-        if (body != null) { c.doOutput = true; c.setRequestProperty("Content-Type", "application/json"); c.outputStream.use { it.write(body.toString().toByteArray()) } }
-        val code = c.responseCode
-        if (code == 401) throw Unauthorized()
-        if (code !in 200..299) throw IOException("HTTP $code")
-        if (code == 204) return null
-        val text = c.inputStream.bufferedReader().use { it.readText() }
-        return if (text.trimStart().startsWith("[")) JSONArray(text) else JSONObject(text)
+        try {
+            c.requestMethod = method; c.connectTimeout = connectMs; c.readTimeout = wait
+            c.setRequestProperty("Authorization", auth(withToken))
+            c.setRequestProperty("Accept", "application/json")
+            if (body != null) { c.doOutput = true; c.setRequestProperty("Content-Type", "application/json"); c.outputStream.use { it.write(body.toString().toByteArray()) } }
+            val code = c.responseCode
+            if (code == 401) throw Unauthorized()
+            if (code !in 200..299) throw Answered(code)
+            if (code == 204) return null
+            val text = c.inputStream.bufferedReader().use { it.readText() }
+            if (text.isBlank()) return null
+            return if (text.trimStart().startsWith("[")) JSONArray(text) else JSONObject(text)
+        } catch (e: org.json.JSONException) { throw IOException("not Jellyfin") }
+        finally { runCatching { c.errorStream?.close() } }
+    }
+
+    // what to tell the person when the server doesn't answer, in their words
+    fun why(e: Exception, s: String = server): String = when (e) {
+        is Unauthorized -> "el servidor ya no te reconoce"
+        is java.net.SocketTimeoutException -> "no contesta $s: ¿el celular está en la misma red o en Tailscale?"
+        is java.net.UnknownHostException -> "no encuentro $s: ¿el celular tiene red?"
+        is java.net.ConnectException, is java.net.NoRouteToHostException -> "no contesta $s: ¿está prendido el servidor?"
+        is Answered -> if (e.code >= 500) "el servidor tuvo un problema (HTTP ${e.code}): probá de nuevo en un rato" else "el servidor no lo tiene (HTTP ${e.code})"
+        is javax.net.ssl.SSLException -> "no pude hablar seguro con $s: probá con http://"
+        else -> if (e.message == "not Jellyfin") "$s no contestó como Jellyfin" else "se cortó la conexión con $s: probá de nuevo"
     }
 
     // sign-in: "" when it worked, otherwise what to tell the person (blocking: a thread of its own)
@@ -105,7 +141,7 @@ object Jf : MusicLib {
         if (s.isEmpty()) return "La dirección no parece la de un servidor: por ejemplo 192.168.0.199:8096"
         return try {
             val r = call("POST", "/Users/AuthenticateByName", body = JSONObject().put("Username", userName.take(128)).put("Pw", password.take(256)),
-                withToken = false, base = s) as? JSONObject ?: return "El servidor no contestó como Jellyfin"
+                withToken = false, base = s, wait = 30_000) as? JSONObject ?: return "El servidor no contestó como Jellyfin"
             val t = r.optString("AccessToken"); val u = r.optJSONObject("User")
             if (t.isEmpty() || u == null) return "El servidor no contestó como Jellyfin"
             server = s; token = t; user = u.optString("Id"); name = u.optString("Name").ifEmpty { userName }
@@ -114,10 +150,8 @@ object Jf : MusicLib {
             Now.changed()
             ""
         } catch (e: Unauthorized) { "Usuario o contraseña incorrectos" }
-        catch (e: java.net.SocketTimeoutException) { "No contesta $s: ¿el celular está en la misma red o en Tailscale?" }
-        catch (e: java.net.UnknownHostException) { "No encuentro $s" }
-        catch (e: java.net.ConnectException) { "No contesta $s: ¿está prendido el servidor?" }
-        catch (e: Exception) { "No pude entrar: " + (e.message ?: e.javaClass.simpleName) }
+        catch (e: Answered) { if (e.code == 404) "En $s no hay un Jellyfin: ¿es el puerto 8096?" else "No pude entrar: " + why(e, s) }
+        catch (e: Exception) { why(e, s).replaceFirstChar { it.uppercase() } }
     }
 
     fun signOut() {
@@ -126,10 +160,17 @@ object Jf : MusicLib {
         save(); runCatching { cache().delete() }; Now.changed()
     }
 
-    // the server no longer takes the token (a song's address answered 401): sign in again
+    // the server no longer takes the token: sign in again
     fun expired() = fail(Unauthorized())
+    // 0.1.15: a song's address answered 401: whether the server still takes the token (true), not (false: signed out
+    // then), or didn't answer (null). Blocking
+    fun check(): Boolean? {
+        if (!signedIn) return false
+        return try { call("GET", "/Users/$user"); true } catch (e: Unauthorized) { expired(); false } catch (e: Exception) { null }
+    }
     private fun fail(e: Exception) {
-        error = if (e is Unauthorized) "signed out" else e.message ?: e.javaClass.simpleName
+        error = if (e is Unauthorized) "signed out" else why(e)
+        fails++
         if (e is Unauthorized) { token = ""; save() }                // the server no longer takes it: sign in again
         Now.changed()
     }
@@ -162,12 +203,16 @@ object Jf : MusicLib {
         if (!signedIn) return false
         if (!force && albums.isNotEmpty() && System.currentTimeMillis() - readAt < 6 * 3600_000L) return true
         // 0.1.11: being read already (MODE just asked for it): wait for that reading instead of answering an empty list
-        if (reading) { val t0 = System.currentTimeMillis(); while (reading && albums.isEmpty() && System.currentTimeMillis() - t0 < 60_000) Thread.sleep(100); return albums.isNotEmpty() }
-        reading = true; Now.changed()
+        // (0.1.15: up to three minutes, a big library's first reading)
+        var waiting = false
+        synchronized(this) {
+            if (reading) waiting = true else reading = true
+        }
+        if (waiting) { val t0 = System.currentTimeMillis(); while (reading && albums.isEmpty() && System.currentTimeMillis() - t0 < 180_000) Thread.sleep(100); return albums.isNotEmpty() }
+        Now.changed()
         try {
             val al = all("/Users/$user/Items", mapOf("IncludeItemTypes" to "MusicAlbum", "Recursive" to true, "SortBy" to "SortName", "Fields" to "AlbumArtist,ProductionYear"))
-                .map { JfAlbum(it.optString("Id"), it.optString("Name").ifEmpty { "UNTITLED" }, it.optString("AlbumArtist"), it.optInt("ProductionYear"),
-                    it.optJSONArray("AlbumArtists")?.optJSONObject(0)?.optString("Id").orEmpty()) }
+                .map { JfAlbum(it.optString("Id"), it.optString("Name").ifEmpty { "UNTITLED" }, it.optString("AlbumArtist"), it.optInt("ProductionYear"), artistIds(it)) }
             val ar = all("/Artists/AlbumArtists", mapOf("UserId" to user, "SortBy" to "SortName"))
                 .map { JfArtist(it.optString("Id"), it.optString("Name").ifEmpty { "?" }) }
             albums = al.sortedBy { sortKey(it.name) }; artists = ar.sortedBy { sortKey(it.name) }; readAt = System.currentTimeMillis(); error = ""
@@ -193,24 +238,26 @@ object Jf : MusicLib {
     }
     override fun albumsOf(artistId: String): List<JfAlbum> {
         if (Tel.mine(artistId)) return Tel.albumsOf(artistId)
-        val mine = albums.filter { it.artistId == artistId }
+        val mine = albums.filter { it.by(artistId) }
         if (mine.isNotEmpty() || !signedIn) return mine
         return try {
             val r = call("GET", "/Users/$user/Items", mapOf("AlbumArtistIds" to artistId, "IncludeItemTypes" to "MusicAlbum", "Recursive" to true,
                 "SortBy" to "ProductionYear,SortName", "Fields" to "AlbumArtist,ProductionYear")) as? JSONObject
             val a = r?.optJSONArray("Items") ?: JSONArray()
-            (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { JfAlbum(it.optString("Id"), it.optString("Name"), it.optString("AlbumArtist"), it.optInt("ProductionYear"), artistId) }
+            (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { JfAlbum(it.optString("Id"), it.optString("Name"), it.optString("AlbumArtist"), it.optInt("ProductionYear"), artistIds(it).ifEmpty { artistId }) }
         } catch (e: Exception) { fail(e); emptyList() }
     }
+    private fun artistIds(o: JSONObject): String = o.optJSONArray("AlbumArtists")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it)?.optString("Id")?.takeIf { id -> id.isNotEmpty() && !id.contains(',') } } }
+        .orEmpty().joinToString(",")
     // the newest albums on the server
-    override fun recent(): List<JfAlbum> = try {
+    override fun recent(): List<JfAlbum> = if (!signedIn) emptyList() else try {
         val r = call("GET", "/Users/$user/Items", mapOf("IncludeItemTypes" to "MusicAlbum", "Recursive" to true, "SortBy" to "DateCreated",
             "SortOrder" to "Descending", "Limit" to 60, "Fields" to "AlbumArtist,ProductionYear")) as? JSONObject
         val a = r?.optJSONArray("Items") ?: JSONArray()
         (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { JfAlbum(it.optString("Id"), it.optString("Name"), it.optString("AlbumArtist"), it.optInt("ProductionYear")) }
     } catch (e: Exception) { fail(e); emptyList() }
     // songs from the whole library at random (AL AZAR)
-    override fun shuffle(count: Int): List<JfSong> = try {
+    override fun shuffle(count: Int): List<JfSong> = if (!signedIn) emptyList() else try {
         val r = call("GET", "/Users/$user/Items", mapOf("IncludeItemTypes" to "Audio", "Recursive" to true, "SortBy" to "Random", "Limit" to count,
             "Fields" to "MediaSources")) as? JSONObject
         songsFrom(r?.optJSONArray("Items") ?: JSONArray()).also { l -> l.forEach { byId[it.id] = it } }
@@ -222,7 +269,7 @@ object Jf : MusicLib {
         val hit = { s: String -> val k = sortKey(s); words.all { k.contains(it) } }
         val ar = artists.filter { hit(it.name) }.take(30)
         val al = albums.filter { hit(it.name + " " + it.artist) }.take(60)
-        val so = try {
+        val so = if (!signedIn) emptyList() else try {
             val r = call("GET", "/Users/$user/Items", mapOf("SearchTerm" to text.trim().take(100), "IncludeItemTypes" to "Audio", "Recursive" to true,
                 "Limit" to 60, "Fields" to "MediaSources")) as? JSONObject
             songsFrom(r?.optJSONArray("Items") ?: JSONArray()).also { l -> l.forEach { byId[it.id] = it } }
@@ -259,8 +306,10 @@ object Jf : MusicLib {
         if (!signedIn || !ID.matches(id)) throw IOException("signed out")
         return "$server/Audio/$id/universal?UserId=$user&DeviceId=$device&MaxStreamingBitrate=140000000" +
             "&Container=flac,mp3,aac,m4a%7Caac,m4b%7Caac,ogg,oga,opus,webma,wav&TranscodingContainer=flac&TranscodingProtocol=http" +
-            "&AudioCodec=flac&api_key=$token"
+            "&AudioCodec=flac&ApiKey=$token"
     }
+    // 0.1.15: and the header that carries the token (what Jellyfin asks for; ApiKey above if a redirect drops it)
+    fun streamHeaders(id: String): Map<String, String> = if (Tel.mine(id) || !signedIn) emptyMap() else mapOf("Authorization" to auth())
     // an album's picture (Jellyfin serves pictures without a token)
     fun cover(albumId: String): Uri? = if (Tel.mine(albumId)) Tel.cover(albumId) else if (signedIn && ID.matches(albumId)) Uri.parse("$server/Items/$albumId/Images/Primary?maxHeight=300&quality=85") else null
 

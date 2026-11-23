@@ -514,9 +514,12 @@ class MainActivity : AppCompatActivity() {
         val here = Cd.parse(c?.currentMediaItem?.mediaId)
         val n = here ?: store.cdTrack
         val len = c?.duration?.takeIf { here != null && it > 0 } ?: 0L
+        // 0.1.15: an MP3 CD's file says its own song, artist and album (its tags) once it plays
+        val m = if (here != null && Cd.status == "files") c?.mediaMetadata else null
+        val tag = { v: CharSequence? -> v?.toString()?.trim()?.ifEmpty { null } }
         return JSONObject().put("status", Cd.status).put("files", Cd.status == "files").put("n", if (Cd.count() > 0) n else 0).put("total", Cd.count())
-            .put("title", if (Cd.count() > 0) Cd.title(n) else "").put("artist", if (Cd.count() > 0) Cd.artist(n) else "")
-            .put("album", Cd.names?.album ?: "").put("year", Cd.names?.year ?: "")
+            .put("title", tag(m?.title) ?: if (Cd.count() > 0) Cd.title(n) else "").put("artist", tag(m?.artist) ?: if (Cd.count() > 0) Cd.artist(n) else "")
+            .put("album", tag(m?.albumTitle)?.takeIf { it != "CD" } ?: Cd.names?.album ?: "").put("year", Cd.names?.year ?: "")
             .put("len", len / 1000.0).put("pos", (if (here != null) c?.currentPosition ?: 0L else 0L) / 1000.0)
             .put("rand", store.usbRand).put("rep", store.usbRep)
     }
@@ -629,9 +632,10 @@ class MainActivity : AppCompatActivity() {
         val album = { a: JfAlbum -> JSONObject().put("t", "album").put("id", a.id).put("name", a.name).put("sub", listOf(a.artist, if (a.year > 0) a.year.toString() else "").filter { it.isNotEmpty() }.joinToString(" · ")) }
         val song = { x: JfSong, i: Int -> JSONObject().put("t", "song").put("id", x.id).put("i", i).put("name", x.name).put("sub", listOf(x.artist, x.album).filter { it.isNotEmpty() }.joinToString(" · "))
             .put("n", x.n).put("len", x.len).put("q", Jf.quality(x)) }
+        val lib = if (kind == "artist" || kind == "album") Music.of(id) else Music.now()
+        val f0 = lib.fails                                           // 0.1.15: only this list's own failure is told
         try {
-            val lib = if (kind == "artist" || kind == "album") Music.of(id) else Music.now()
-            if (kind != "home" && kind != "search") lib.read()
+            if (kind != "home" && kind != "search" && kind != "queue") lib.read()
             val items: List<JSONObject> = when (kind) {
                 "home" -> { lib.read(force = System.currentTimeMillis() - lib.readAt > 30 * 60_000L); emptyList() }   // 0.1.10: what's new, every half hour
                 "albums" -> lib.albums.map(album)
@@ -644,8 +648,9 @@ class MainActivity : AppCompatActivity() {
                     ar.map { JSONObject().put("t", "artist").put("id", it.id).put("name", it.name) } + al.map(album) + so.mapIndexed { i, x -> song(x, i).put("t", "found") } }
                 else -> emptyList()
             }
-            o.put("items", JSONArray(items)).put("albums", lib.albums.size).put("artists", lib.artists.size).put("error", lib.error).put("tel", Music.tel)
-        } catch (e: Exception) { o.put("items", JSONArray()).put("error", e.message ?: "error") }
+            o.put("items", JSONArray(items)).put("albums", lib.albums.size).put("artists", lib.artists.size).put("tel", Music.tel)
+                .put("error", if (!lib.ready && !Music.tel) "signed out" else if (lib.fails != f0) lib.error else "")
+        } catch (e: Exception) { o.put("items", JSONArray()).put("error", if (lib === Jf) Jf.why(e) else e.message ?: "error") }
         main.post { web.evaluateJavascript("window.faceJfList&&faceJfList($req,$o)", null) }
     }.start()
     // something only the main thread may ask (the player), from another thread: waited for, at most 2 s
@@ -783,8 +788,11 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface fun discs(): String = discsJson()
         // SERVER (Jellyfin): sign in (the password goes to the server and is forgotten: the token is kept), the lists, play
         @JavascriptInterface fun jfSignIn(server: String, user: String, pw: String) {
-            Thread { val err = Jf.signIn(server, user, pw); if (err.isEmpty()) Jf.read(force = true)
-                jfFace("signed", JSONObject().put("error", err).put("name", Jf.name).put("albums", Jf.albums.size).toString())
+            // 0.1.15: in at once; the library read after it (a big one takes a while), the lists told when it's there
+            Thread { val err = Jf.signIn(server, user, pw)
+                if (err.isEmpty()) Music.set("srv")
+                jfFace("signed", JSONObject().put("error", err).put("name", Jf.name).toString())
+                if (err.isEmpty()) { Jf.read(force = true); jfFace("read", JSONObject().put("albums", Jf.albums.size).put("error", Jf.error).toString()) }
                 main.post { refresh() } }.start()
         }
         @JavascriptInterface fun jfSignOut() { Thread { Jf.signOut(); main.post { controller?.let { c -> if (Jf.parse(c.currentMediaItem?.mediaId) != null) c.stop() }; store.jfQueue = "[]"; refresh() } }.start() }

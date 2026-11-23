@@ -1,5 +1,26 @@
 # Novedades
 
+## 0.1.15 — 2026-11-22
+
+### Arreglado
+- **SERVER ya no dice "no contesta" por algo viejo:** cada lista dice lo que le pasó a ella; si el servidor no contestó
+  una vez y después sí, las listas que siguen andan sin el cartel. Y lo dice en castellano (¿está prendido?, ¿el celular
+  está en la misma red o en Tailscale?), con **PROBAR DE NUEVO** para pedirla otra vez.
+- **Una pregunta al servidor que se cae se hace de nuevo** (el Wi-Fi que se despierta, una conexión vieja que la red
+  cortó), en vez de dejar la lista vacía.
+- **Un tema que el servidor no manda ya no te saca del servidor:** antes, con eso solo, había que entrar de nuevo con la
+  contraseña. Ahora se pregunta si el servidor te sigue reconociendo, y si sí, pasa al tema siguiente.
+- **Listo para Jellyfin 12:** la clave va como Jellyfin pide ahora (la forma vieja, que la 12 apaga, dejaba los temas sin
+  sonar y pedía entrar de nuevo).
+- **Entrar al servidor es al toque:** las listas se abren enseguida y la biblioteca se lee atrás ("Leyendo la
+  biblioteca…"); antes "Entrando…" esperaba a que se leyera toda.
+- **Un disco de dos artistas aparece en los dos** dentro de ARTISTAS.
+- **TEL:** Callejeros, Calle 13 y toda carpeta que empezara con "call" quedaban afuera (se las confundía con las
+  grabaciones de llamadas). Las intros cortas de un disco (menos de 20 segundos) ahora están. Los discos muestran su año.
+- **CD de MP3:** un disco grabado en varias sesiones muestra todos sus archivos (antes, solo los de la primera); los
+  temas dicen su nombre, artista y disco de sus etiquetas, como en USB. Un CD que empieza con una pista de datos
+  encuentra su nombre en MusicBrainz.
+
 ## 0.1.14 — 2026-11-22
 
 ### Nuevo

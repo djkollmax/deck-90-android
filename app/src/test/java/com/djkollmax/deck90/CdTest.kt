@@ -29,6 +29,14 @@ class CdTest {
         assertEquals("1+3+45150+150+15150+30150", Cd.tocParam(tracks, 45000))
     }
 
+    // 0.1.15: a mixed-mode CD (track 1 the computer's data, the music from track 2): the id starts at track 2
+    @Test fun `a mixed-mode CD's disc id starts at its first audio track`() {
+        val tracks = listOf(CdTrack(2, 15000, 15000), CdTrack(3, 30000, 15000))
+        val all = listOf(CdDrive.TocEntry(1, 0, false)) + tracks.map { CdDrive.TocEntry(it.n, it.lba, true) }
+        assertEquals("vC.pRrwZ7viOx4Ng2VrJ0opIcTI-", Cd.discId(tracks, all, 45000))
+        assertEquals("2+3+45150+15150+30150", Cd.tocParam(tracks, 45000))
+    }
+
     @Test fun `a data disc's music files, Joliet names, in order`() {
         val disc = HashMap<Int, ByteArray>()
         fun sec(n: Int) = disc.getOrPut(n) { ByteArray(2048) }

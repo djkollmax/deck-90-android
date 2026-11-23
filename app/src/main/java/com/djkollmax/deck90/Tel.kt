@@ -22,6 +22,7 @@ interface MusicLib {
     val artists: List<JfArtist>
     val reading: Boolean
     val error: String
+    val fails: Int                                                   // 0.1.15: how many failures so far
     val readAt: Long
     fun read(force: Boolean = false): Boolean
     fun songsOf(albumId: String): List<JfSong>
@@ -61,6 +62,7 @@ object Tel : MusicLib {
     @Volatile override var artists: List<JfArtist> = emptyList(); private set
     @Volatile override var reading = false; private set
     @Volatile override var error = ""; private set
+    @Volatile override var fails = 0; private set
     @Volatile override var readAt = 0L; private set
     @Volatile private var songs: List<JfSong> = emptyList()
     @Volatile private var byAlbum: Map<String, List<JfSong>> = emptyMap()
@@ -76,8 +78,10 @@ object Tel : MusicLib {
     val permission: String get() = if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_AUDIO else Manifest.permission.READ_EXTERNAL_STORAGE
     override val ready: Boolean get() = app?.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
 
-    // apps' files, voice notes and recordings that Android may count as music
-    private val NOT_MUSIC = Regex("(^|/)(android/|whatsapp|telegram|recordings/|call|voice recorder|notifications/|ringtones/|alarms/)", RegexOption.IGNORE_CASE)
+    // apps' files, voice notes and recordings that Android may count as music (0.1.15: whole folder names: "call" also
+    // left out Callejeros and Calle 13)
+    private val NOT_MUSIC = Regex("(^|/)(android|whatsapp[^/]*|telegram[^/]*|recordings|call|calls|call ?recordings?|voice ?recorder|sound ?recorder|notifications|ringtones|alarms)/", RegexOption.IGNORE_CASE)
+    fun notMusic(path: String) = NOT_MUSIC.containsMatchIn(path)
 
     // Android's library read (fast: one query); blocking, a thread of its own
     override fun read(force: Boolean): Boolean {
@@ -94,15 +98,14 @@ object Tel : MusicLib {
             if (Build.VERSION.SDK_INT >= 29) cols += MediaStore.Audio.Media.RELATIVE_PATH
             if (Build.VERSION.SDK_INT >= 30) { cols += MediaStore.Audio.Media.ALBUM_ARTIST; cols += MediaStore.Audio.Media.BITRATE }
             if (Build.VERSION.SDK_INT >= 34) { cols += "samplerate"; cols += "bits_per_sample" }
-            val out = ArrayList<JfSong>(); val addedAt = HashMap<String, Long>(); val albumArtist = HashMap<String, String>()
+            val out = ArrayList<JfSong>(); val addedAt = HashMap<String, Long>(); val albumArtist = HashMap<String, String>(); val years = HashMap<String, Int>()
             ctx.contentResolver.query(uri, cols.toTypedArray(), MediaStore.Audio.Media.IS_MUSIC + " != 0", null, null)?.use { c ->
                 val ix = cols.associateWith { c.getColumnIndex(it) }
                 fun str(k: String) = ix[k]?.takeIf { it >= 0 }?.let { c.getString(it) }.orEmpty()
                 fun num(k: String) = ix[k]?.takeIf { it >= 0 }?.let { if (c.isNull(it)) 0L else c.getLong(it) } ?: 0L
                 while (c.moveToNext()) {
-                    if (NOT_MUSIC.containsMatchIn(str(MediaStore.Audio.Media.RELATIVE_PATH))) continue
+                    if (notMusic(str(MediaStore.Audio.Media.RELATIVE_PATH))) continue
                     val len = (num(MediaStore.Audio.Media.DURATION) / 1000).toInt()
-                    if (len in 1 until 20) continue                                   // a ringtone or a voice note
                     val id = "t" + num(MediaStore.Audio.Media._ID); val album = "t" + num(MediaStore.Audio.Media.ALBUM_ID)
                     val track = num(MediaStore.Audio.Media.TRACK).toInt()
                     val mime = str(MediaStore.Audio.Media.MIME_TYPE).lowercase()
@@ -116,20 +119,28 @@ object Tel : MusicLib {
                         artist, str(MediaStore.Audio.Media.ALBUM).let { if (it == "<unknown>") "" else it }, album, track % 1000, track / 1000, len,
                         codec, kbps, num("samplerate").toInt(), num("bits_per_sample").toInt())
                     val at = num(MediaStore.Audio.Media.DATE_ADDED); if (at > (addedAt[album] ?: 0L)) addedAt[album] = at
+                    val y = num(MediaStore.Audio.Media.YEAR).toInt(); if (y in 1900..2100 && y > (years[album] ?: 0)) years[album] = y
                 }
             }
-            val grouped = out.groupBy { it.albumId }.mapValues { (_, l) -> l.sortedWith(compareBy({ it.disc }, { it.n }, { Jf.sortKey(it.name) })) }
+            val kept = shortOut(out)
+            val grouped = kept.groupBy { it.albumId }.mapValues { (_, l) -> l.sortedWith(compareBy({ it.disc }, { it.n }, { Jf.sortKey(it.name) })) }
             val al = grouped.map { (aid, l) ->
                 val who = albumArtist[aid] ?: l.map { it.artist }.distinct().let { if (it.size == 1) it[0] else if (it.isEmpty()) "" else "Various Artists" }
-                JfAlbum(aid, l.first().album.ifEmpty { "UNTITLED" }, who.ifEmpty { "Unknown Artist" }, 0, artistId(who.ifEmpty { "Unknown Artist" }))
+                JfAlbum(aid, l.first().album.ifEmpty { "UNTITLED" }, who.ifEmpty { "Unknown Artist" }, years[aid] ?: 0, artistId(who.ifEmpty { "Unknown Artist" }))
             }
-            songs = out; byAlbum = grouped; added = addedAt
+            songs = kept; byAlbum = grouped; added = addedAt
             albums = al.sortedBy { Jf.sortKey(it.name) }
             artists = al.map { it.artist }.distinct().map { JfArtist(artistId(it), it) }.sortedBy { Jf.sortKey(it.name) }
-            Jf.know(out); readAt = System.currentTimeMillis(); error = ""
+            Jf.know(kept); readAt = System.currentTimeMillis(); error = ""
             return true
-        } catch (e: Exception) { error = e.message ?: e.javaClass.simpleName; return false }
+        } catch (e: Exception) { error = e.message ?: e.javaClass.simpleName; fails++; return false }
         finally { reading = false; Now.changed() }
+    }
+    // songs under 20 seconds with no longer one in their album are ringtones or voice notes; in an album, its intro
+    // (0.1.15: those were left out too)
+    fun shortOut(all: List<JfSong>): List<JfSong> {
+        val real = all.filter { it.len !in 1 until 20 }.mapTo(HashSet()) { it.albumId }   // albums with a song of their own
+        return all.filter { it.len !in 1 until 20 || it.albumId in real }
     }
     private fun artistId(name: String) = "t" + (Jf.sortKey(name).hashCode().toLong() and 0xffffffffL)
 
@@ -146,7 +157,7 @@ object Tel : MusicLib {
     }
 
     override fun songsOf(albumId: String): List<JfSong> { if (songs.isEmpty()) read(); return byAlbum[albumId].orEmpty() }
-    override fun albumsOf(artistId: String): List<JfAlbum> { if (songs.isEmpty()) read(); return albums.filter { it.artistId == artistId } }
+    override fun albumsOf(artistId: String): List<JfAlbum> { if (songs.isEmpty()) read(); return albums.filter { it.by(artistId) } }
     override fun recent(): List<JfAlbum> { if (songs.isEmpty()) read(); return albums.sortedByDescending { added[it.id] ?: 0L }.take(60) }
     override fun shuffle(count: Int): List<JfSong> { if (songs.isEmpty()) read(); return songs.shuffled().take(count) }
     override fun search(text: String): Triple<List<JfArtist>, List<JfAlbum>, List<JfSong>> {

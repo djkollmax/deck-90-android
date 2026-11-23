@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.1.15
+
+- SERVER: the token goes in the `Authorization: MediaBrowser … Token=` header only (no `X-Emby-Authorization`), and
+  a song's address carries it as `ApiKey` plus the same header through the resolver (`Jf.streamHeaders`): Jellyfin 12
+  turns `api_key` off. A GET that gets no answer, and a POST that never connected, is asked once more after 1.5 s.
+- Errors are per list: `MusicLib.fails` counts failures and `jfList` reports `error` only when it grew during that
+  request (a stale `Jf.error` used to show "No contesta el servidor" on later, unrelated lists, even an empty queue);
+  any answer from the server clears it. `Jf.why()` turns exceptions into the person's words; the face shows them with
+  PROBAR DE NUEVO, and ENTRAR AL SERVIDOR when signed out.
+- A song answering 401 no longer signs out by itself: `Jf.check()` asks `/Users/{id}`; only a 401 there does.
+- Sign-in answers as soon as the token is in; the library is read afterwards and the face told (`faceJf('read')`).
+  A reading waited for gives up after 3 minutes, not 1.
+- `JfAlbum.artistId` holds every album artist ("id1,id2"), `by()` matches any.
+- TEL: the not-music folders match whole names (`call` dropped Callejeros and Calle 13); songs under 20 s are kept
+  when their album has a longer one (`Tel.shortOut`); albums get their year.
+- CD: a data disc reads the last data track's file system (multisession), falling back to the first; the disc id and
+  the TOC sent to MusicBrainz start at the first audio track; an MP3 CD's files get their tags as USB's do.
+- Tests: `JellyfinServerTest` against a small pretend Jellyfin (sign-in, the library, a dropped connection, per-list
+  errors, the 401 check, where the token goes); TEL's folders and short songs; a mixed-mode CD's disc id.
+
 ## 0.1.14
 
 - The double-DIN front from deck-90 7.10.30 (HDB held; held again, the DP940; kept as `front` in the face's look):

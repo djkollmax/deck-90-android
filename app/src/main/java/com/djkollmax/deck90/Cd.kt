@@ -73,8 +73,12 @@ object Cd {
                 Thread { lookup(ctx) }.start()
                 return status
             }
-            val data = list.firstOrNull { !it.audio } ?: return set("empty")
-            files = Iso(d, data.lba).music(AUDIO).take(999); tracks = emptyList()
+            // 0.1.15: a disc burned in several sessions has its whole file system in the last one (the first held
+            // only what was burned first)
+            val data = list.lastOrNull { !it.audio } ?: return set("empty")
+            files = (runCatching { Iso(d, data.lba).music(AUDIO) }.getOrNull()?.takeIf { it.isNotEmpty() }
+                ?: list.firstOrNull { !it.audio }?.takeIf { it !== data }?.let { Iso(d, it.lba).music(AUDIO) }.orEmpty()).take(999)
+            tracks = emptyList()
             return set(if (files.isEmpty()) "empty" else "files")
         } catch (e: Exception) {
             android.util.Log.w("Deck90", "CD: " + e)
@@ -91,17 +95,18 @@ object Cd {
     }
 
     // MusicBrainz disc id: the first and last audio track, the lead-out and the 99 offsets (+150), hex, SHA-1, base64
-    // with . _ - (an enhanced CD's data track after the audio moves the lead-out 11400 sectors before it)
+    // with . _ - (an enhanced CD's data track after the audio moves the lead-out 11400 sectors before it; 0.1.15: a
+    // mixed-mode CD's audio starts at track 2)
     fun discId(audio: List<CdTrack>, all: List<CdDrive.TocEntry>, lead: Int): String {
         val last = audio.last().n
         val next = all.firstOrNull { it.n == last + 1 && !it.audio }
         val leadout = (if (next != null) next.lba - 11400 else lead) + 150
-        val sb = StringBuilder().append("%02X".format(1)).append("%02X".format(last)).append("%08X".format(leadout))
+        val sb = StringBuilder().append("%02X".format(audio.first().n)).append("%02X".format(last)).append("%08X".format(leadout))
         for (i in 1..99) sb.append("%08X".format(audio.firstOrNull { it.n == i }?.let { it.lba + 150 } ?: 0))
         val sha = MessageDigest.getInstance("SHA-1").digest(sb.toString().toByteArray(Charsets.US_ASCII))
         return java.util.Base64.getEncoder().encodeToString(sha).replace('+', '.').replace('/', '_').replace('=', '-')
     }
-    fun tocParam(audio: List<CdTrack>, leadout: Int): String = (listOf(1, audio.last().n, leadout + 150) + audio.map { it.lba + 150 }).joinToString("+")
+    fun tocParam(audio: List<CdTrack>, leadout: Int): String = (listOf(audio.first().n, audio.last().n, leadout + 150) + audio.map { it.lba + 150 }).joinToString("+")
 
     // the names, asked once per disc and kept (cd-names.json); the cover with them
     private fun lookup(ctx: Context) {

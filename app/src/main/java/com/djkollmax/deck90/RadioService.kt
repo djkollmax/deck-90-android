@@ -149,10 +149,10 @@ class RadioService : MediaLibraryService() {
                 Now.song = ""; Now.error = ""; Now.changed()
             }
             override fun onMediaMetadataChanged(m: MediaMetadata) { Now.changed() }
-            // a song from USB: its own tags once the file is read (the item keeps them: asked once)
+            // a song from USB (0.1.15: or an MP3 CD's): its own tags once the file is read (the item keeps them: asked once)
             override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
                 val item = player.currentMediaItem ?: return
-                if (Usb.parse(item.mediaId) == null || item.mediaMetadata.extras?.getBoolean("tags") == true) return
+                if ((Usb.parse(item.mediaId) == null && !item.mediaId.startsWith("cdf:")) || item.mediaMetadata.extras?.getBoolean("tags") == true) return
                 val t = Tags.read(tracks)
                 val m = item.mediaMetadata.buildUpon().apply {
                     t?.title?.let { setTitle(it) }; t?.artist?.let { setArtist(it) }; t?.album?.let { setAlbumTitle(it) }
@@ -203,7 +203,16 @@ class RadioService : MediaLibraryService() {
                     // to three in a row; it answered 401: sign in again; it didn't answer at all: NO SERVER
                     val http = generateSequence(error.cause) { it.cause }.filterIsInstance<androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException>().firstOrNull()
                     when {
-                        http?.responseCode == 401 -> { Jf.expired(); Now.error = "SIGN IN" }
+                        // 0.1.15: a song answered 401: signed out only if the server says so for the person too (a song
+                        // alone, or a server that doesn't take the token in a song's address, isn't a reason)
+                        http?.responseCode == 401 -> { val index = player.currentMediaItemIndex; Thread {
+                            val still = Jf.check()
+                            main.post {
+                                if (still == false) { Now.error = "SIGN IN"; Now.changed() }
+                                else if (player.currentMediaItemIndex == index && jfSkips < 3 && player.hasNextMediaItem()) { jfSkips++; Now.error = ""; player.seekToNextMediaItem(); player.prepare(); player.play() }
+                                else { Now.error = "NO SERVER"; Now.changed() }
+                            }
+                        }.start(); return }
                         http != null && jfSkips < 3 && player.hasNextMediaItem() -> { jfSkips++; Now.error = ""; player.seekToNextMediaItem(); player.prepare(); player.play() }
                         // 0.1.12: no answer (the Wi-Fi went, the server rebooting): tried again, the song from where it was
                         Jf.signedIn -> { reconnect(item.mediaId, player.currentMediaItemIndex); return }
@@ -411,7 +420,10 @@ class Resolver(private val store: Store) : ResolvingDataSource.Resolver {
         val u = dataSpec.uri
         if (u.scheme != "deck90") return dataSpec
         if (u.host == "tuned") return dataSpec.withUri(Uri.parse(address(store.tuned ?: throw IOException("no tuned station"))))
-        if (u.host == "jf") return dataSpec.withUri(Uri.parse(Jf.stream(u.lastPathSegment ?: throw IOException("bad song"))))   // SERVER, with its token
+        if (u.host == "jf") {                                            // SERVER, with its token (0.1.15: in the header)
+            val id = u.lastPathSegment ?: throw IOException("bad song")
+            return dataSpec.withUri(Uri.parse(Jf.stream(id))).withAdditionalHeaders(Jf.streamHeaders(id))
+        }
         val parts = u.pathSegments
         val band = parts.getOrNull(0) ?: throw IOException("bad station")
         val slot = parts.getOrNull(1)?.toIntOrNull() ?: throw IOException("bad station")

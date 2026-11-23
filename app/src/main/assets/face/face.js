@@ -918,8 +918,10 @@ window.faceJfList = (req, o) => {
   const items = o.items || [];
   if (o.title && jf.view.kind !== 'search') { jf.view.title = o.title.toUpperCase(); el('jfTitle').textContent = jf.view.title; }
   const what = { albums: 'discos', artists: 'artistas', artist: 'discos', album: 'temas', recent: 'discos', queue: 'temas', search: 'resultados' }[o.kind] || '';
-  jfRender(items, o.error === 'signed out' ? 'El servidor ya no te reconoce: SERVIDOR para entrar de nuevo'
-    : o.error && !items.length ? '⚠ No contesta el servidor: ' + o.error : items.length ? items.length + ' ' + what : o.kind === 'search' ? 'No encontré nada' : 'No hay nada acá');
+  // 0.1.15: the app says what went wrong in words ("no contesta …: ¿está prendido el servidor?"), only this list's
+  if (o.error === 'signed out') return jfRender([{ t: 'nav', k: 'login', name: 'ENTRAR AL SERVIDOR', sub: 'El servidor ya no te reconoce: la contraseña de nuevo' }], '');
+  if (o.error && !items.length) return jfRender([{ t: 'nav', k: 'again', name: 'PROBAR DE NUEVO', sub: '' }], '⚠ ' + o.error.charAt(0).toUpperCase() + o.error.slice(1));
+  jfRender(items, items.length ? items.length + ' ' + what + (o.error ? ' · ⚠ ' + o.error : '') : o.kind === 'search' ? 'No encontré nada' : 'No hay nada acá');
 };
 function jfRender(items, msg) {
   el('jfMsg').textContent = msg || '';
@@ -944,6 +946,7 @@ el('jfList').addEventListener('click', e => {
   if (d.t === 'nav') {
     if (d.k === 'login') { jfShow(false); return faceJf('login'); }
     if (d.k === 'allow') { if (app.jfSource) app.jfSource('tel'); return; }
+    if (d.k === 'again') return jfView(v);                          // 0.1.15: the same list asked again
     return jfView({ kind: d.k, title: d.name }, true);
   }
   if (d.t === 'artist') return jfView({ kind: 'artist', id: d.id, title: d.name.toUpperCase() }, true);
@@ -998,7 +1001,15 @@ window.faceJf = (what, data) => {
     el('jfGo').disabled = false;
     if (data && data.error) { el('jfLoginMsg').textContent = data.error; return; }
     el('jfLogin').classList.remove('show');
-    toast('SERVER · hola ' + (data && data.name || '') + (data && data.albums ? ' · ' + data.albums + ' discos' : ''));
+    toast('SERVER · hola ' + (data && data.name || '') + ' · leyendo tu biblioteca…');
+    view.jf = Object.assign({}, view.jf, { reading: true });
     jfShow(true); jfHome();
+  }
+  // 0.1.15: the library read after signing in: the lists' counts, or why it couldn't
+  if (what === 'read') {
+    if (data && data.albums) toast('SERVER · ' + data.albums + ' discos');
+    else if (data && data.error) toast('SERVER · ' + data.error);
+    if (view.jf) Object.assign(view.jf, { reading: false, albums: data && data.albums || view.jf.albums });
+    if (jf.view && jf.view.kind === 'home' && el('jfBox').classList.contains('show')) jfHome();
   }
 };
