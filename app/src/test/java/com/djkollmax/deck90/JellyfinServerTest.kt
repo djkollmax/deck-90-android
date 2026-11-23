@@ -6,6 +6,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import org.json.JSONObject
 import java.net.ServerSocket
 import java.net.Socket
 import java.util.concurrent.atomic.AtomicInteger
@@ -20,6 +21,7 @@ class JellyfinServerTest {
     @Volatile private var down = false                                      // answer 500 to everything
     @Volatile private var revoked = false                                   // the token no longer taken
     @Volatile private var home = ""                                         // the LocalAddress the server tells
+    private val prefs = java.util.concurrent.ConcurrentHashMap<String, String>()
     private val others = mutableListOf<ServerSocket>()
 
     private val albums = """{"Items":[
@@ -41,7 +43,7 @@ class JellyfinServerTest {
         val headers = HashMap<String, String>()
         while (true) { val l = line(); if (l.isEmpty()) break; headers[l.substringBefore(':').trim().lowercase()] = l.substringAfter(':').trim() }
         val sent = ByteArray(headers["content-length"]?.toIntOrNull() ?: 0).also { var got = 0; while (got < it.size) { val n = inp.read(it, got, it.size - got); if (n < 0) break; got += n } }
-        val path = first[1].substringBefore('?'); val q = first[1].substringAfter('?', "")
+        val path = first[1].substringBefore('?'); val q = first[1].substringAfter('?', ""); val method = first[0]
         synchronized(seen) { seen += path to headers }
         if (drop.getAndDecrement() > 0) return                                 // the connection cut: no answer at all
         drop.compareAndSet(-1, 0)
@@ -52,10 +54,15 @@ class JellyfinServerTest {
             path == "/Users/AuthenticateByName" -> {
                 if (String(sent).contains("\"Pw\":\"bien\"")) 200 to """{"AccessToken":"tok123","User":{"Id":"u1","Name":"Damián"}}""" else 401 to ""
             }
-            !path.startsWith("/Users/") && !path.startsWith("/Artists/") -> 404 to ""        // not Jellyfin's
+            !path.startsWith("/Users/") && !path.startsWith("/Artists/") && !path.startsWith("/Playlists/") && !path.startsWith("/DisplayPreferences/") -> 404 to ""        // not Jellyfin's
             !auth.contains("Token=\"tok123\"") || revoked -> 401 to ""
             path == "/Users/u1" -> 200 to """{"Id":"u1","Name":"Damián"}"""
             path == "/Users/u1/Views" -> 200 to """{"Items":[{"Id":"lib1","CollectionType":"music"},{"Id":"lib2","CollectionType":"movies"}]}"""
+            // 0.1.20: a playlist the PC made, and the place kept for it (the user's display preferences for "deck90")
+            path == "/Users/u1/Items" && q.contains("IncludeItemTypes=Playlist") -> 200 to """{"Items":[{"Id":"f1000001","Name":"Ruta","Type":"Playlist","MediaType":"Audio","ChildCount":2}]}"""
+            path == "/Playlists/f1000001/Items" -> 200 to songs
+            path == "/DisplayPreferences/deck90" && method == "GET" -> 200 to JSONObject().put("Id", "deck90").put("Client", "deck90").put("CustomPrefs", JSONObject(prefs as Map<*, *>)).toString()
+            path == "/DisplayPreferences/deck90" -> { JSONObject(String(sent)).optJSONObject("CustomPrefs")?.let { c -> c.keys().forEach { k -> prefs[k] = c.getString(k) } }; 204 to "" }
             path == "/Users/u1/Items" && q.contains("IncludeItemTypes=MusicAlbum") -> 200 to albums
             path == "/Users/u1/Items" && q.contains("IncludeItemTypes=Audio") && q.contains("ParentId=a1") -> 200 to songs
             path == "/Artists/AlbumArtists" -> 200 to artists
@@ -163,5 +170,18 @@ class JellyfinServerTest {
         down = false; revoked = true
         assertEquals(false, Jf.check()); assertFalse(Jf.signedIn)
         revoked = false
+    }
+
+    // 0.1.20: the PC's lists are here, and where one was left goes both ways
+    @Test fun `the lists are Jellyfin's, and where one was left goes both ways`() {
+        signedIn()
+        assertEquals(listOf("Ruta" to 2), Jf.lists().map { it.name to it.count })
+        assertEquals(listOf("We Disappear", "Open Eye Signal"), Jf.listSongs("f1000001").map { it.name })
+        prefs["list:f1000001"] = """{"song":"b2","i":1,"t":95,"at":1}"""          // left on the PC on the second song, 1:35 in
+        val p = Jf.place("f1000001")!!
+        assertEquals("b2", p.getString("song")); assertEquals(95L, p.getLong("t"))
+        Jf.placeSet("f1000001", "b1", 0, 42)                                        // the phone goes on and leaves it on the first
+        assertEquals("b1", JSONObject(prefs["list:f1000001"]!!).getString("song"))
+        assertEquals(42L, JSONObject(prefs["list:f1000001"]!!).getLong("t"))
     }
 }

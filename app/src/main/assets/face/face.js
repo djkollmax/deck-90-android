@@ -17,6 +17,7 @@ const ST_KEYS = [   // [key, left %, top %, width %, height %, round]: Deck 90's
   ['m3', 59.970, 80.891, 6.997, 12.987], ['m4', 66.967, 80.891, 6.897, 12.987],
   ['m5', 74.663, 80.891, 6.597, 12.987], ['m6', 81.259, 80.891, 8.996, 12.987],
   ['slot', 17.091, 15.213, 73.463, 10.019], ['eject', 91.854, 24.490, 4.998, 15.955, 1],
+  ['aux', 92.079, 46.753, 4.748, 17.625, 1],                       // 0.1.20: AUX, the other apps' music (as Deck 90 7.10.34)
   ['pwr', 2.599, 80.891, 6.397, 12.987],                           // as on the PC's front (src/index.html)
   ['view', 28.886, 42.857, 53.373, 27.458],                         // the display itself: the VU, then the spectrum
 ];
@@ -27,7 +28,7 @@ const DDIN = { img: 'img/front-ddin.jpg', w: 1683, h: 935, display: [466, 297, 9
     ['pwr', 58, 782, 122, 73], ['att', 190, 782, 115, 73], ['scan', 315, 782, 125, 73], ['loc', 440, 782, 125, 73],
     ['prev', 582, 782, 124, 73], ['next', 706, 782, 126, 73], ['m1', 843, 782, 112, 78], ['m2', 958, 782, 112, 78],
     ['m3', 1073, 782, 112, 78], ['m4', 1190, 782, 112, 78], ['m5', 1308, 782, 112, 78], ['m6', 1425, 782, 115, 78],
-    ['slot', 150, 118, 1380, 87], ['eject', 1513, 207, 101, 101, 1], ['view', 466, 297, 934, 382]] };
+    ['slot', 150, 118, 1380, 87], ['eject', 1513, 207, 101, 101, 1], ['aux', 1522, 398, 90, 90, 1], ['view', 466, 297, 934, 382]] };
 const el = id => document.getElementById(id);
 const app = window.Deck90Android || {                              // a browser: a stand-in, for a look at the face
   state: () => JSON.stringify({ band: 'FM1', slot: 3, freq: '95.1', station: 'Metro', song: 'Un tema de prueba', playing: true, power: true, quality: 'AAC 128',
@@ -280,11 +281,12 @@ function padSync(s) {
     return;
   }
   padKeys(12);
-  el('padBands').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.band === s.band));
+  const aux = s.mode === 'aux';                                      // 0.1.20: on AUX no band or memory is the one playing
+  el('padBands').querySelectorAll('button').forEach(b => b.classList.toggle('on', !aux && b.dataset.band === s.band));
   const names = s.memories || [];
   el('padMems').querySelectorAll('button').forEach((b, i) => {
     const n = names[i] || '';
-    b.querySelector('small').textContent = n || '—'; b.classList.toggle('empty', !n); b.classList.toggle('on', i + 1 === s.slot);
+    b.querySelector('small').textContent = n || '—'; b.classList.toggle('empty', !n); b.classList.toggle('on', !aux && i + 1 === s.slot);
   });
 }
 
@@ -385,6 +387,22 @@ function usbNow(s, u) {
   el('nowSong').textContent = s.error ? 'Enchufá el pendrive y tocá ▶' : [u.artist, u.album || u.discName].filter(Boolean).join(' · ');
   const q = el('nowQ'); q.textContent = (/FLAC|ALAC|WAV/.test(s.quality || '') ? 'HI-FI · ' : '') + (s.quality || ''); q.classList.toggle('hifi', /FLAC|ALAC|WAV/.test(s.quality || ''));
 }
+// 0.1.20: AUX, another app's music (Spotify, YouTube Music…): its song as a CD's; the app in the quality's corner
+function auxTrack(s, u, extra) {
+  let title, artist, ok = false;
+  if (!u.granted) { title = 'AUX'; artist = 'ALLOW DECK 90 IN ANDROID\'S LIST · AUX'; }
+  else if (!u.app) { title = 'AUX'; artist = 'PLAY MUSIC IN ANOTHER APP'; }
+  else { ok = !!u.title; title = extra || u.title || u.app.toUpperCase(); artist = (ddin ? u.artist : [u.artist, u.album].filter(Boolean).join(' · ')) + (u.playing ? '' : ' · PAUSE'); }
+  // no DISC mark (it isn't one); on the double DIN the album on its own line
+  return { title, artist, album: ddin && ok ? u.album || '' : '', number: 0, length: u.len || 0, quality: s.quality || '', disc: false, source: 'AUX', playing: true };
+}
+function auxNow(s, u) {
+  el('nowBand').textContent = 'AUX' + (u.app ? ' · ' + u.app.toUpperCase() : '') + (s.sleep > 0 ? ' · SLEEP ' + s.sleep + "'" : '');
+  el('nowName').textContent = !u.granted ? 'La música de otras apps' : u.title || (u.app ? u.app : 'Nada sonando');
+  el('nowSong').textContent = !u.granted ? 'AUX: Android te pide permiso (prendé Deck 90 en la lista)' : u.app ? [u.artist, u.album].filter(Boolean).join(' · ') + (u.playing ? '' : ' · en pausa')
+    : 'Poné música en Spotify, YouTube Music o la que uses';
+  const q = el('nowQ'); q.textContent = ''; q.classList.remove('hifi');
+}
 // 0.1.14: on the double DIN the artist alone on the first dot line, and under it the album, its year and the place
 function ddTrack(track, s, u) {
   if (!track.disc || !u.artist) return;
@@ -403,12 +421,12 @@ function read() {
   const line2 = ddin && live ? [s.song || trouble ? s.station : '', s.town || '', s.cc || ''].filter(Boolean).join(' · ') : '';
   // SLEEP: the minutes left take turns with the quality, in its corner of the display
   const corner = s.sleep > 0 && Math.floor(Date.now() / 4000) % 2 ? 'SLEEP ' + s.sleep : live ? s.quality || '' : '';
-  const u = s.mode === 'usb' && s.usb || s.mode === 'cd' && s.cd || s.mode === 'server' && s.jf, usbOn = !!u && !greet;
+  const u = s.mode === 'usb' && s.usb || s.mode === 'cd' && s.cd || s.mode === 'server' && s.jf || s.mode === 'aux' && s.aux, usbOn = !!u && !greet;
   const radio = greet ? { band: '', frequency: greet, preset: s.slot || 1, live: false, name: '', mono: false, local: false, quality: '' }
     : extra
     ? { band: '', frequency: extra, preset: s.slot || 1, live, name: context(s), mono: !!s.mono, local: s.band === 'LOCAL' && !s.tuned, quality: corner }
     : { band: s.memo ? 'A.MEM' : s.tuned ? '' : s.band, frequency: s.freq || shortName(s.station).toUpperCase(), preset: s.slot || 1, live, name: line, line2, mono: !!s.mono, local: s.band === 'LOCAL' && !s.tuned, quality: corner };
-  const track = usbOn ? (s.mode === 'cd' ? cdTrack(s, u, extra) : s.mode === 'server' ? jfTrack(s, u, extra) : usbTrack(s, u, extra)) : null;
+  const track = usbOn ? (s.mode === 'cd' ? cdTrack(s, u, extra) : s.mode === 'server' ? jfTrack(s, u, extra) : s.mode === 'aux' ? auxTrack(s, u, extra) : usbTrack(s, u, extra)) : null;
   if (track && ddin) ddTrack(track, s, u);
   if (ddin && disp) { const t = new Date(); disp.setClock(two(t.getHours()) + ':' + two(t.getMinutes())); disp.setTemp(wxTemp(s)); }
   const key = JSON.stringify([track || radio, off, s.memories, s.scan, s.slot, s.band, s.mode]);
@@ -419,7 +437,7 @@ function read() {
   read.last = key;
   if (disp) { if (track) disp.setTrack(track); else dispRadio(radio); }
   padSync(s);
-  if (u) { if (s.mode === 'cd') cdNow(s, u); else if (s.mode === 'server') jfNow(s, u); else usbNow(s, u); return; }
+  if (u) { if (s.mode === 'cd') cdNow(s, u); else if (s.mode === 'server') jfNow(s, u); else if (s.mode === 'aux') auxNow(s, u); else usbNow(s, u); return; }
   el('nowBand').textContent = (s.memo ? 'A.MEM · ' : '') + (s.tuned ? 'MUNDO' + (s.cc ? ' · ' + s.cc : '') : s.band + (s.town ? ' · ' + s.town.toUpperCase() : '') + ' · ' + s.slot + (s.freq ? ' · ' + s.freq : '')) + (s.scan ? ' · SCAN' : '') + (s.sleep > 0 ? ' · SLEEP ' + s.sleep + "'" : '');
   el('nowName').textContent = s.station || 'DECK 90';
   el('nowSong').textContent = trouble || s.song || '';
@@ -899,6 +917,7 @@ function jfHome() {
     { t: 'nav', k: 'albums', name: 'DISCOS', sub: j.albums ? j.albums + ' discos' : '' },
     { t: 'nav', k: 'artists', name: 'ARTISTAS', sub: j.artists ? j.artists + ' artistas' : '' },
     { t: 'nav', k: 'queue', name: 'LO QUE SUENA', sub: j.total ? j.total + ' temas' : '' },
+    tel ? null : { t: 'nav', k: 'lists', name: 'LISTAS', sub: 'Las de Jellyfin y del DM-90 de la PC: siguen donde las dejaste' },   // 0.1.20
     tel ? null : { t: 'nav', k: 'login', name: 'SERVIDOR', sub: who.server || '' },
   ].filter(Boolean), j.reading ? 'Leyendo la biblioteca…' : '');
 }
@@ -920,18 +939,22 @@ window.faceJfList = (req, o) => {
   if (req !== jf.req || !jf.view) return;
   const items = o.items || [];
   if (o.title && jf.view.kind !== 'search') { jf.view.title = o.title.toUpperCase(); el('jfTitle').textContent = jf.view.title; }
-  const what = { albums: 'discos', artists: 'artistas', artist: 'discos', album: 'temas', recent: 'discos', queue: 'temas', search: 'resultados' }[o.kind] || '';
+  const what = { albums: 'discos', artists: 'artistas', artist: 'discos', album: 'temas', recent: 'discos', queue: 'temas', search: 'resultados', lists: 'listas', plist: 'temas' }[o.kind] || '';
   // 0.1.15: the app says what went wrong in words ("no contesta …: ¿está prendido el servidor?"), only this list's
   if (o.error === 'signed out') return jfRender([{ t: 'nav', k: 'login', name: 'ENTRAR AL SERVIDOR', sub: 'El servidor ya no te reconoce: la contraseña de nuevo' }], '');
   if (o.error && !items.length) return jfRender([{ t: 'nav', k: 'again', name: 'PROBAR DE NUEVO', sub: '' }], '⚠ ' + o.error.charAt(0).toUpperCase() + o.error.slice(1));
-  jfRender(items, items.length ? items.length + ' ' + what + (o.error ? ' · ⚠ ' + o.error : '') : o.kind === 'search' ? 'No encontré nada' : 'No hay nada acá');
+  jfRender(items, items.length ? items.length + ' ' + what + (o.error ? ' · ⚠ ' + o.error : '') : o.kind === 'search' ? 'No encontré nada'
+    : o.kind === 'lists' ? 'No hay listas: se hacen en el DM-90 de la PC (LISTS) o en Jellyfin' : 'No hay nada acá');
+  // 0.1.20: a list: the song it was left on, marked (touching it goes on from its second)
+  const here = o.place != null && el('jfList').children[o.place];
+  if (here) { here.classList.add('on'); here.scrollIntoView({ block: 'center' }); el('jfMsg').textContent += ' · quedó en el ' + (o.place + 1); }
 };
 function jfRender(items, msg) {
   el('jfMsg').textContent = msg || '';
   const now = view.jf && view.jf.title;
   el('jfList').replaceChildren(...items.map(it => {
     const b = document.createElement('button'); b.type = 'button';
-    b.className = 'rf-item' + (it.t === 'nav' || it.t === 'go' || it.t === 'artist' || it.t === 'album' ? ' nav' : '') + ((it.t === 'song' || it.t === 'found') && it.name === now ? ' on' : '');
+    b.className = 'rf-item' + (it.t === 'nav' || it.t === 'go' || it.t === 'artist' || it.t === 'album' || it.t === 'plist' ? ' nav' : '') + ((it.t === 'song' || it.t === 'found') && it.name === now ? ' on' : '');
     Object.assign(b.dataset, { t: it.t, id: it.id || '', k: it.k || '', i: it.i != null ? it.i : '', name: it.name || '' });
     const name = document.createElement('b'); name.textContent = (it.t === 'song' && it.n ? String(it.n).padStart(2, '0') + '  ' : '') + it.name;
     const sub = document.createElement('small'); sub.textContent = it.sub || '';
@@ -954,7 +977,8 @@ el('jfList').addEventListener('click', e => {
   }
   if (d.t === 'artist') return jfView({ kind: 'artist', id: d.id, title: d.name.toUpperCase() }, true);
   if (d.t === 'album') return jfView({ kind: 'album', id: d.id, title: d.name.toUpperCase() }, true);
-  if (d.t === 'song' && app.jfPlay) app.jfPlay(v.kind === 'queue' ? 'queue' : 'album', v.id || '', Number(d.i) || 0);
+  if (d.t === 'plist') return jfView({ kind: 'plist', id: d.id, title: d.name.toUpperCase() }, true);
+  if (d.t === 'song' && app.jfPlay) app.jfPlay(v.kind === 'queue' ? 'queue' : v.kind === 'plist' ? 'plist' : 'album', v.id || '', Number(d.i) || 0);
   if (d.t === 'found' && app.jfPlay) app.jfPlay('found', d.id, 0);
   setTimeout(read, 400); jfShow(false);
 });

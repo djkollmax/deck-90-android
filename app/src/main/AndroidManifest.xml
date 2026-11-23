@@ -49,5 +49,16 @@
                 <action android:name="android.media.browse.MediaBrowserService" />
             </intent-filter>
         </service>
+        <!-- 0.1.20: AUX: Android shows one app the other apps' players only through a notification listener, which
+             the person switches on in the phone's settings (Aux.kt). Nothing of the notifications is read -->
+        <service
+            android:name=".AuxListener"
+            android:exported="false"
+            android:label="Deck 90 · AUX"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
     </application>
 </manifest>

@@ -51,6 +51,10 @@ Son las mismas que en la PC:
   minutos, y otra vez para sacarlo. Al final la radio baja sola en 10 segundos y se apaga, aunque la pantalla esté
   apagada.
 - **MODE** pasa de la radio a **USB**, al **CD** y a **SERVER**, y de vuelta a la radio.
+- **AUX** (el botón redondo de la derecha) es la música de otra app del teléfono (Spotify, YouTube Music, un podcast):
+  el display muestra el tema y la app, **SEL** la pausa o la sigue y ◀◀ ▶▶ pasan de tema. La primera vez Android pide
+  permiso (prendé Deck 90 en la lista de acceso a notificaciones: solo mira qué suena). El VU y el espectro no se mueven
+  con esa música: Android no deja que una app escuche el sonido de otra. **MODE** vuelve a la radio.
 
 ## USB y CD
 
@@ -75,7 +79,9 @@ Para entrar de nuevo, MÚSICA → SERVIDOR.
   y **USB**. Lo que copies al teléfono aparece solo. En el auto, TEL está como **TEL · MÚSICA DEL TELÉFONO**.
 
 - **MÚSICA** (arriba de los números, o EJECT) abre las listas: **AL AZAR**, **RECIENTES**, **DISCOS**, **ARTISTAS**,
-  **LO QUE SUENA** y la búsqueda, que encuentra artistas, discos y temas mientras escribís.
+  **LO QUE SUENA**, **LISTAS** y la búsqueda, que encuentra artistas, discos y temas mientras escribís.
+- **LISTAS** son las listas de tu Jellyfin, las mismas que hacés en el DM-90 de la PC (LISTS): cada una sigue en el tema
+  y el segundo donde la dejaste, en la PC o en el celular.
 - ◀◀ ▶▶ pasan de tema, 1 a 6 (y 7 a 12 manteniendo) van a un tema, **BAND** pasa de disco, **SCAN** es RAND y **LOC**
   es REP.
 - Suena en la calidad del archivo; lo que el celular no reproduce, el servidor lo manda como FLAC. Un tema que no se

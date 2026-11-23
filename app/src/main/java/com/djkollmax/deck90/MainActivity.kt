@@ -126,8 +126,14 @@ class MainActivity : AppCompatActivity() {
 
     // what the face shows, made on the main thread (the page reads it from its own)
     private var seen = -1
+    private var auxTick = 0
     private val ticker = object : Runnable {
-        override fun run() { if (Now.version != seen || flashUntil > 0 || Now.greetUntil > 0 || Sleep.at != 0L) refresh(); main.postDelayed(this, 250) }
+        override fun run() {
+            // 0.1.20: in AUX the other app changes song on its own: looked at every second
+            val aux = store.mode == "aux" && ++auxTick % 4 == 0
+            if (listNow.isNotEmpty() && auxTick++ % 4 == 0) listPlace()
+            if (Now.version != seen || flashUntil > 0 || Now.greetUntil > 0 || Sleep.at != 0L || aux) refresh(); main.postDelayed(this, 250)
+        }
     }
 
     private fun refresh() {
@@ -142,13 +148,15 @@ class MainActivity : AppCompatActivity() {
         val now = System.currentTimeMillis()
         if (flashUntil in 1 until now) { flash = ""; flashUntil = 0 }
         val usb = store.mode == "usb"
+        val aux = if (store.mode == "aux") Aux.state(this) else null
         state = JSONObject()
             .put("mode", store.mode).put("usb", if (usb) usbState(c) else JSONObject.NULL).put("cd", if (store.mode == "cd") cdState(c) else JSONObject.NULL)
             .put("jf", if (store.mode == "server") jfState(c) else JSONObject.NULL)
+            .put("aux", if (aux != null) aux else JSONObject.NULL)
             .put("band", Bands.label(band)).put("slot", slot).put("freq", st?.freq ?: "").put("tuned", tuned)
             .put("station", st?.name ?: "").put("song", Now.song).put("cc", st?.cc ?: "")
-            .put("playing", playing).put("buffering", buffering).put("error", if (playing) "" else Now.error)
-            .put("mono", band == "AM" && !tuned).put("quality", if (store.mode == "cd" && Cd.status == "audio" && Cd.parse(c?.currentMediaItem?.mediaId) != null) "PCM 16/44.1"
+            .put("playing", if (aux != null) aux.optBoolean("playing") else playing).put("buffering", aux == null && buffering).put("error", if (playing || aux != null) "" else Now.error)
+            .put("mono", band == "AM" && !tuned).put("quality", if (aux != null) aux.optString("app").uppercase() else if (store.mode == "cd" && Cd.status == "audio" && Cd.parse(c?.currentMediaItem?.mediaId) != null) "PCM 16/44.1"
                 else if (store.mode == "server") Jf.quality(Jf.song(Jf.parse(c?.currentMediaItem?.mediaId) ?: "")) else quality(c))
             .put("memo", now < memo).put("scan", scanning).put("power", Now.power).put("greet", Now.greeting(now)).put("flash", flash).put("sleep", Sleep.left(now))
             // 0.1.11: every song of the disc, folder or queue (the big keys scroll), not only the first twelve
@@ -222,7 +230,9 @@ class MainActivity : AppCompatActivity() {
         // MODE: RADIO → USB → CD → RADIO (held: pick the pendrive); the CD's slot on the face: the CD
         val tap = { web.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP); refresh() }
         // MODE: RADIO → USB → CD → SERVER → RADIO
-        if (k == "mode") { when { hold && store.mode == "server" -> sourceNext(); hold -> usbChoose(); store.mode == "usb" -> toCd(); store.mode == "cd" -> toServer(); store.mode == "server" -> toRadio(); else -> toUsb() }; tap(); return }
+        if (k == "mode") { when { hold && store.mode == "server" -> sourceNext(); hold -> usbChoose(); store.mode == "usb" -> toCd(); store.mode == "cd" -> toServer(); store.mode == "server" || store.mode == "aux" -> toRadio(); else -> toUsb() }; tap(); return }
+        if (k == "aux") { if (!Now.power) Now.on(); toAux(); tap(); return }   // 0.1.20: the other apps' music
+        if (store.mode == "aux" && Now.power && auxKey(k)) { tap(); return }
         if (k == "mode:radio") { toRadio(); tap(); return }
         if (k == "slot" && store.mode != "cd") { toCd(); tap(); return }
         if (store.mode == "usb" && Now.power && usbKey(k, hold, c)) { tap(); return }
@@ -237,10 +247,10 @@ class MainActivity : AppCompatActivity() {
                     " (PWR apretado otra vez: más tiempo o sin apagado)"
                     else "SLEEP · sin apagado automático")
             }
-            k == "pwr" && Now.power -> { Sleep.cancel(); c?.pause(); Now.off("GOOD BYE") }
+            k == "pwr" && Now.power -> { Sleep.cancel(); c?.pause(); if (store.mode == "aux") Aux.key(this, "pause"); Now.off("GOOD BYE") }
             k == "pwr" || !Now.power && (k == "band" || k == "sel") -> {   // on (BAND and SEL too): where it was, with HELLO
                 Now.on()
-                when { c != null && c.mediaItemCount > 0 -> { c.prepare(); c.play() }; store.mode == "usb" -> playUsb(store.usbDisc, store.usbTrack, store.usbPos); store.mode == "cd" -> toCd(); store.mode == "server" -> toServer(); else -> tune(store.band, store.slot) }
+                when { store.mode == "aux" -> Aux.key(this, "play"); c != null && c.mediaItemCount > 0 -> { c.prepare(); c.play() }; store.mode == "usb" -> playUsb(store.usbDisc, store.usbTrack, store.usbPos); store.mode == "cd" -> toCd(); store.mode == "server" -> toServer(); else -> tune(store.band, store.slot) }
             }
             k == "sel" -> when {
                 c == null -> {}
@@ -339,6 +349,31 @@ class MainActivity : AppCompatActivity() {
     // the one before), SCAN RAND, LOC REP (the disc, the song, off), EJECT reads the folder again
     private fun radioMode(c: MediaController) {
         store.mode = "radio"; c.shuffleModeEnabled = false; c.repeatMode = Player.REPEAT_MODE_OFF
+    }
+    // 0.1.20: AUX: Deck 90's own player quiet, the other app's music on the display and under SEL and ◀◀ ▶▶
+    private fun toAux() {
+        controller?.let { c -> if (Usb.parse(c.currentMediaItem?.mediaId) != null) store.usbPos = c.currentPosition
+            if (Jf.parse(c.currentMediaItem?.mediaId) != null) { store.jfIndex = c.currentMediaItemIndex; store.jfPos = c.currentPosition }
+            c.pause() }
+        store.mode = "aux"; Now.error = ""
+        if (!Aux.granted(this)) {
+            toast("AUX · para ver y manejar lo que suena en Spotify y las demás apps, Android pide permiso: prendé Deck 90 en la lista")
+            Aux.ask(this)
+        } else {
+            val app = Aux.state(this).optString("app")
+            toast("AUX · " + (if (app.isEmpty()) "poné música en otra app (Spotify, YouTube Music…): acá la manejás" else app) + " · MODE: la radio")
+        }
+        refresh()
+    }
+    // SEL plays or pauses it, ◀◀ ▶▶ skip; the rest (BAND, the memories) go to the radio as always
+    private fun auxKey(k: String): Boolean {
+        val act = when (k) { "sel" -> "toggle"; "next", "seek+" -> "next"; "prev", "seek-" -> "prev"; else -> return false }
+        if (!Aux.key(this, act)) {
+            if (!Aux.granted(this)) { toast("AUX · falta el permiso: prendé Deck 90 en la lista"); Aux.ask(this) }
+            else toast("AUX · no hay ninguna app con música: abrí Spotify, YouTube Music o la que uses")
+        }
+        main.postDelayed({ refresh() }, 350)
+        return true
     }
     private fun toRadio() {
         controller?.let { c -> if (Usb.parse(c.currentMediaItem?.mediaId) != null) store.usbPos = c.currentPosition
@@ -563,9 +598,24 @@ class MainActivity : AppCompatActivity() {
         }
         return (0 until c.mediaItemCount).mapNotNull { Jf.parse(c.getMediaItemAt(it).mediaId)?.let { id -> Jf.song(id) } }
     }
+    // 0.1.20: the list playing (its queue as it was made), and where it is, sent to Jellyfin every 15 s and on pause
+    private var listNow = ""; private var listQueue = ""; private var listSent = ""; private var listAt = 0L
+    private fun listPlace() {
+        val c = controller ?: return
+        if (listNow.isEmpty()) return
+        if (store.mode != "server" || store.jfQueue != listQueue) { listNow = ""; return }   // another queue: the list was left
+        val id = Jf.parse(c.currentMediaItem?.mediaId) ?: return
+        val t = c.currentPosition / 1000
+        val key = id + "|" + t / 15
+        if (key == listSent || (c.isPlaying && System.currentTimeMillis() - listAt < 15_000)) return
+        listSent = key; listAt = System.currentTimeMillis()
+        val list = listNow; val i = c.currentMediaItemIndex
+        Thread { Jf.placeSet(list, id, i, t) }.start()
+    }
     private fun playServer(songs: List<JfSong>, at: Int, pos: Long = 0) {
         val c = controller ?: return
         if (songs.isEmpty()) return
+        listNow = ""                                                 // (a list sets it again after)
         val i = at.coerceIn(0, songs.size - 1)
         store.mode = "server"; store.jfQueue = Jf.queueJson(songs); store.jfIndex = i; store.jfPos = pos
         scanning = false; main.removeCallbacks(scan); Now.on(); Now.error = ""; Now.song = ""
@@ -646,6 +696,12 @@ class MainActivity : AppCompatActivity() {
                 "artist" -> lib.albumsOf(id).map(album).also { o.put("title", lib.artists.firstOrNull { a -> a.id == id }?.name ?: "") }
                 "album" -> lib.songsOf(id).mapIndexed { i, x -> song(x, i) }.also { o.put("title", lib.albums.firstOrNull { a -> a.id == id }?.name ?: lib.songsOf(id).firstOrNull()?.album ?: "") }
                 "recent" -> lib.recent().map(album)
+                // 0.1.20: the lists (the server's, shared with the PC), and one's songs with the one it was left on
+                "lists" -> Jf.lists().map { JSONObject().put("t", "plist").put("id", it.id).put("name", it.name).put("sub", it.count.toString() + if (it.count == 1) " tema" else " temas") }
+                "plist" -> Jf.listSongs(id).mapIndexed { i, x -> song(x, i) }.also { list ->
+                    Jf.place(id)?.let { p -> val at = p.optInt("i", -1).takeIf { it in list.indices && list[it].optString("id") == p.optString("song") }
+                        ?: list.indexOfFirst { it.optString("id") == p.optString("song") }
+                        if (at >= 0) o.put("place", at) } }
                 "queue" -> onMain { jfQueue(controller) }.mapIndexed { i, x -> song(x, i) }   // 0.1.11: the player only answers on the main thread
                 "search" -> { val (ar, al, so) = lib.search(text)
                     ar.map { JSONObject().put("t", "artist").put("id", it.id).put("name", it.name) } + al.map(album) + so.mapIndexed { i, x -> song(x, i).put("t", "found") } }
@@ -671,6 +727,14 @@ class MainActivity : AppCompatActivity() {
             "artist" -> { songs = Music.albumsOf(id).flatMap { Music.songsOf(it.id) }.take(500); at = 0 }
             "found" -> { val s = Jf.song(id); songs = if (s != null && s.albumId.isNotEmpty()) Music.songsOf(s.albumId) else listOfNotNull(s); at = songs.indexOfFirst { it.id == id }.coerceAtLeast(0) }
             "queue" -> { main.post { controller?.let { c -> if (index < c.mediaItemCount) { c.seekTo(index, 0); c.play() } } }; return@Thread }
+            // 0.1.20: a list, from the song touched; the one it was left on goes on from its second
+            "plist" -> {
+                songs = Jf.listSongs(id)
+                val p = Jf.place(id); val s = songs.getOrNull(index)
+                val pos = if (p != null && s != null && p.optString("song") == s.id) p.optLong("t") * 1000 else 0L
+                main.post { if (songs.isNotEmpty()) { playServer(songs, index, pos); listNow = id; listQueue = store.jfQueue; listSent = "" } else toast("SERVER · la lista está vacía") }
+                return@Thread
+            }
             else -> return@Thread
         }
         main.post { if (songs.isEmpty()) toast((if (Music.tel) "TEL · " else "SERVER · ") + (Music.now().error.ifEmpty { "no hay temas" })) else playServer(songs, at) }

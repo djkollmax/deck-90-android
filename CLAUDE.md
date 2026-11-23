@@ -11,7 +11,8 @@ README.md) is in that Spanish; code, comments, commits and CHANGELOG.md are in E
   `Now` for the song and problems), `Stations.kt` (the bands and their first memories, as in deck-90's
   src/core/radio.js), `RadioBrowser.kt` (the lookup and the best-stream choice, as in deck-90's main.js and
   radio.js), `Store.kt` (what's kept: memories, band and slot, resolved addresses; media ids `st:FM2:3`),
-  `Levels.kt` (the meters' tap: peaks, RMS and the spectrum), `MainActivity.kt` (the WebView with the face and its keys).
+  `Levels.kt` (the meters' tap: peaks, RMS and the spectrum), `Aux.kt` (AUX: the other apps' players, through a
+  notification listener), `MainActivity.kt` (the WebView with the face and its keys).
 - `app/src/main/assets/face/`: the stereo's face. `stereo-face.css`, `dp940-display.js` and `img/front.jpg` are
   deck-90's own, copied by `scripts/sync-face.sh` (don't edit them here); `index.html`, `face.css`, `face.js` are
   this app's (the hotspots as in deck-90's src/remote/stereo.js; the portrait keys; the VU and ESPECTRO views drawn

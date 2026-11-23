@@ -1,5 +1,15 @@
 # Novedades
 
+## 0.1.20 — 2026-11-23
+
+### Nuevo
+- **AUX:** el botón redondo de la derecha del frente pasa a la música de otra app del teléfono (Spotify, YouTube
+  Music, un podcast). El display muestra el tema y la app, **SEL** la pausa o la sigue y ◀◀ ▶▶ pasan de tema. La
+  primera vez Android pide permiso: prendé Deck 90 en la lista (solo mira qué suena). El VU y el espectro no se
+  mueven con esa música: Android no deja que una app escuche el sonido de otra.
+- **LISTAS en MÚSICA (servidor):** las listas de tu Jellyfin, las mismas del DM-90 de la PC. Cada una sigue en el tema
+  y el segundo donde la dejaste, en la PC o en el celular.
+
 ## 0.1.19 — 2026-11-22
 
 ### Mejor

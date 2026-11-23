@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.20
+
+- AUX (`Aux.kt`): a `NotificationListenerService` (`AuxListener`, switched on by the person) lets
+  `MediaSessionManager.getActiveSessions` show the other apps' players; mode `aux` shows the playing one (or the last)
+  on the display and in `aux` of the state, SEL/◀◀/▶▶ go to its transport controls, PWR pauses it. The face has an
+  AUX hotspot on both fronts (as Deck 90 7.10.34); in AUX no band or memory is marked, and the DISC mark stays off.
+- LISTAS: `Jf.lists`, `Jf.listSongs`, `Jf.place`, `Jf.placeSet` (Jellyfin playlists and the user's DisplayPreferences
+  for client `deck90`, `list:<id>`, as Deck 90 7.10.36). A list plays from the song touched, the one it was left on
+  from its second; while it plays, the place is sent every 15 s and on pause.
+- Tests: the lists and the place both ways against the pretend Jellyfin.
+
 ## 0.1.19
 
 - Face synced from deck-90 7.10.34: the double-DIN photo with the DP940-style buttons (same size and key places).

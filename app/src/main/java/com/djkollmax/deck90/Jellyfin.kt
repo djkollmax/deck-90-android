@@ -316,6 +316,42 @@ object Jf : MusicLib {
         } catch (e: Exception) { emptyList() }
         return Triple(ar, al, so)
     }
+    // ── 0.1.20: the lists: the person's Jellyfin playlists, the same the PC's DM-90 makes (Deck 90 7.10.36), and where
+    // each was left, kept in Jellyfin (the user's display preferences for "deck90", "list:<id>" → {song, i, t, at}),
+    // so one left in the PC goes on here from the same song, and the other way round ──
+    data class JfList(val id: String, val name: String, val count: Int)
+    fun lists(): List<JfList> = if (!signedIn) emptyList() else try {
+        val r = call("GET", "/Users/$user/Items", mapOf("IncludeItemTypes" to "Playlist", "Recursive" to "true", "SortBy" to "SortName", "Fields" to "ChildCount", "EnableImages" to "false")) as? JSONObject
+        val a = r?.optJSONArray("Items") ?: JSONArray()
+        (0 until a.length()).mapNotNull { a.optJSONObject(it) }.filter { it.optString("MediaType").let { m -> m.isEmpty() || m == "Audio" } }
+            .map { JfList(it.optString("Id"), it.optString("Name").ifEmpty { "LISTA" }, it.optInt("ChildCount")) }
+    } catch (e: Exception) { fail(e); emptyList() }
+    fun listSongs(id: String): List<JfSong> {
+        if (!signedIn || !ID.matches(id)) return emptyList()
+        return try {
+            val r = call("GET", "/Playlists/$id/Items", mapOf("UserId" to user, "Fields" to "MediaSources", "EnableImages" to "false"), wait = 60_000) as? JSONObject
+            songsFrom(r?.optJSONArray("Items") ?: JSONArray()).also { know(it) }
+        } catch (e: Exception) { fail(e); emptyList() }
+    }
+    private val PREFS_PATH = "/DisplayPreferences/deck90"
+    private fun who() = mapOf("userId" to user, "client" to "deck90")
+    // where a list was left (null: never played, or no answer)
+    fun place(id: String): JSONObject? = if (!signedIn) null else runCatching {
+        val r = call("GET", PREFS_PATH, who()) as? JSONObject
+        r?.optJSONObject("CustomPrefs")?.optString("list:$id")?.takeIf { it.isNotEmpty() }?.let { JSONObject(it) }
+    }.getOrNull()
+    // and where it's now: read, this list's changed, written back whole (blocking; quiet when it can't)
+    fun placeSet(id: String, song: String, i: Int, t: Long) {
+        if (!signedIn || !ID.matches(id)) return
+        runCatching {
+            val r = (call("GET", PREFS_PATH, who()) as? JSONObject) ?: JSONObject()
+            val prefs = r.optJSONObject("CustomPrefs") ?: JSONObject()
+            prefs.put("list:$id", JSONObject().put("song", song).put("i", i).put("t", t).put("at", System.currentTimeMillis()).toString())
+            r.put("Id", r.optString("Id").ifEmpty { "deck90" }).put("Client", "deck90").put("CustomPrefs", prefs)
+            call("POST", PREFS_PATH, who(), r)
+        }
+    }
+
     fun song(id: String): JfSong? = byId[id]
     // 0.1.10: TEL's songs, known by their ids as the server's are
     fun know(list: List<JfSong>) { list.forEach { byId[it.id] = it } }
