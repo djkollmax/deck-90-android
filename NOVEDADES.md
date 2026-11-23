@@ -1,5 +1,11 @@
 # Novedades
 
+## 0.1.19 — 2026-11-22
+
+### Mejor
+- **El doble DIN con los botones del single DIN** (el de la PC 7.10.34): lentes de acrílico lisas con borde fino
+  oscuro y teclas negras abajo. Todo en el mismo lugar.
+
 ## 0.1.18 — 2026-11-22
 
 ### Mejor

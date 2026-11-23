@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.19
+
+- Face synced from deck-90 7.10.34: the double-DIN photo with the DP940-style buttons (same size and key places).
+
 ## 0.1.18
 
 - Face synced from deck-90 7.10.33: the redrawn double-DIN photo (`img/front-ddin.jpg`, same size and key places).
