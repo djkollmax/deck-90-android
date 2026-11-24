@@ -2,8 +2,9 @@
 
 El estéreo de [Deck 90](https://github.com/djkollmax/deck-90) en el celular, la tablet y el auto: la radio con las
 mismas bandas y memorias que en la PC (FM1 a FM5, HI-FI y AM, doce memorias por banda) y LOCAL, las radios de donde
-estés; la música de un pendrive (USB), los CD de una lectora por USB y tu música de Jellyfin (SERVER); y el frente
-del estéreo del auto con su display, sus teclas y sus looks.
+estés; la música de un pendrive (USB), los CD de una lectora por USB y tu música de Jellyfin (SERVER), con las mismas
+listas que en la PC; lo que suena en otra app, como Spotify (AUX); y el frente del estéreo del auto, DP940 o doble DIN,
+con su display, sus teclas y sus looks.
 
 ![El celular parado: RADIO, VU y ESPECTRO](docs/celular.jpg)
 
@@ -15,6 +16,8 @@ de vuelta al frente.
 ![El celular acostado](docs/acostado.jpg)
 
 ![Los VU a pantalla completa](docs/acostado-vu.jpg)
+
+![El doble DIN acostado, con un tema del servidor](docs/doble-din.jpg)
 
 **Parado**, arriba queda el frente y debajo la radio y el tema en grande. Más abajo elegís:
 
@@ -84,6 +87,8 @@ Para entrar de nuevo, MÚSICA → SERVIDOR.
   **LO QUE SUENA**, **LISTAS** y la búsqueda, que encuentra artistas, discos y temas mientras escribís.
 - **LISTAS** son las listas de tu Jellyfin, las mismas que hacés en el DM-90 de la PC (LISTS): cada una sigue en el tema
   y el segundo donde la dejaste, en la PC o en el celular.
+![Una lista del servidor que quedó en el tema 4, AUX con Spotify y el VU, y el doble DIN parado](docs/musica-aux.jpg)
+
 - ◀◀ ▶▶ pasan de tema, 1 a 6 (y 7 a 12 manteniendo) van a un tema, **BAND** pasa de disco, **SCAN** es RAND y **LOC**
   es REP.
 - Suena en la calidad del archivo; lo que el celular no reproduce, el servidor lo manda como FLAC. Un tema que no se
