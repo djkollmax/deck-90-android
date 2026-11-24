@@ -1,5 +1,11 @@
 # Novedades
 
+## 0.1.23 — 2026-11-24
+
+### Arreglado
+- **El display ya no pone "?" en lugar de un signo que no tiene:** "½ Full" se lee 1/2 FULL, ² es 2, Ø es O, y en el
+  doble DIN se ven bien ¿ y ¡ (como en Deck 90 7.10.38).
+
 ## 0.1.22 — 2026-11-23
 
 ### Nuevo

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.23
+
+- The face synced from Deck 90 7.10.38: `Deck90DotText` (dot-glyphs.js) turns characters with no glyph into what
+  they stand for (½ → 1/2, ² → 2, Ø → O) before the DP940 and the double DIN draw them; glyphs for ¿ and ¡.
+
 ## 0.1.22
 
 - AUX's meters (`AuxMeter` in `Aux.kt`): Android's `Visualizer` on session 0 (the output mix), 1024-sample 8-bit
