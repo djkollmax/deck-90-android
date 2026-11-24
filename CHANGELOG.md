@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.21
+
+- AUX works: `Store.mode` read `aux` back as `radio`, so the mode never held and the keys and the display stayed on
+  the radio. The modes are `Store.MODES` now (`modeOf`, with a test). AUX also switches the stereo on when it's off.
+
 ## 0.1.20
 
 - AUX (`Aux.kt`): a `NotificationListenerService` (`AuxListener`, switched on by the person) lets

@@ -56,10 +56,10 @@ class Store(context: Context) {
         set(v) { p.edit().putBoolean("onTuned", v).apply() }
     fun current(): Station? = if (onTuned) tuned else station(band, slot)
 
-    // what the stereo plays: "radio" or "usb" (MODE), and on USB the disc, the song and where in it (for the car's
-    // resumption); RAND and REP
+    // what the stereo plays: one of MODES (MODE, and AUX), and on USB the disc, the song and where in it (for the
+    // car's resumption); RAND and REP
     var mode: String
-        get() = p.getString("mode", "radio")!!.let { if (it == "usb" || it == "cd" || it == "server") it else "radio" }
+        get() = modeOf(p.getString("mode", "radio"))
         set(v) { p.edit().putString("mode", v).apply() }
     var usbDisc: Int
         get() = p.getInt("usbDisc", 1).coerceAtLeast(1)
@@ -109,6 +109,9 @@ class Store(context: Context) {
     private fun key(st: Station) = st.q.lowercase() + "|" + st.cc
 
     companion object {
+        // 0.1.21: "aux" too (0.1.20 kept it but read it back as "radio", so AUX never took over the keys)
+        val MODES = setOf("radio", "usb", "cd", "server", "aux")
+        fun modeOf(v: String?) = if (v in MODES) v!! else "radio"
         // the media id of a memory: "st:FM2:3"; its address for the player: deck90://station/FM2/3 (Resolver)
         fun mediaId(band: String, slot: Int) = "st:$band:$slot"
         fun parse(id: String?): Pair<String, Int>? {

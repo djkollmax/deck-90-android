@@ -1,5 +1,12 @@
 # Novedades
 
+## 0.1.21 — 2026-11-23
+
+### Arreglado
+- **AUX** no hacía nada: la app se olvidaba al instante de que estaba en AUX y volvía a la radio, así que el display
+  no mostraba la música de la otra app y SEL y ◀◀ ▶▶ no la manejaban. Ahora sí. Además AUX prende el estéreo si
+  estaba apagado.
+
 ## 0.1.20 — 2026-11-23
 
 ### Nuevo

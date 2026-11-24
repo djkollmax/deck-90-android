@@ -225,8 +225,8 @@ class MainActivity : AppCompatActivity() {
         val c = controller
         if (k != "scan" && scanning) { scanning = false; main.removeCallbacks(scan) }
         val audio = getSystemService(Context.AUDIO_SERVICE) as AudioManager
-        // off, as a stereo switched off: only PWR, SEL, BAND and the memories (on the face or the big keys) switch it on
-        if (!Now.power && !(k == "pwr" && !hold || k == "sel" || k == "band" && !hold || Regex("^(m[1-6]|mem\\d{1,2}|band:.+)$").matches(k))) return
+        // off, as a stereo switched off: only PWR, SEL, BAND, AUX and the memories (on the face or the big keys) switch it on
+        if (!Now.power && !(k == "pwr" && !hold || k == "sel" || k == "aux" || k == "band" && !hold || Regex("^(m[1-6]|mem\\d{1,2}|band:.+)$").matches(k))) return
         // MODE: RADIO → USB → CD → RADIO (held: pick the pendrive); the CD's slot on the face: the CD
         val tap = { web.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP); refresh() }
         // MODE: RADIO → USB → CD → SERVER → RADIO
