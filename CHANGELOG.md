@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.22
+
+- AUX's meters (`AuxMeter` in `Aux.kt`): Android's `Visualizer` on session 0 (the output mix), 1024-sample 8-bit
+  snapshots at its max capture rate, `SCALING_MODE_AS_PLAYED`; each gives peak, RMS and Levels' 28 bands (same dB),
+  served by the bridge's `levels()` and `spectrum()` while it's on. RECORD_AUDIO (asked once, on AUX) and
+  MODIFY_AUDIO_SETTINGS; on only in AUX with the stereo on and the face on screen. A tablet that gives no engine, or
+  silence for 6 s while the other app plays, is told once. `Levels.fft` is shared. Tests: a sine's levels and band.
+
 ## 0.1.21
 
 - AUX works: `Store.mode` read `aux` back as `radio`, so the mode never held and the keys and the display stayed on

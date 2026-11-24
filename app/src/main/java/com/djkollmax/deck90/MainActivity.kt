@@ -119,6 +119,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStop() {
         main.removeCallbacks(ticker); main.removeCallbacks(weather); main.removeCallbacks(cdPoll)
+        AuxMeter.stop()
         runCatching { unregisterReceiver(usbAnswer) }
         controller?.release(); controller = null
         super.onStop()
@@ -131,8 +132,34 @@ class MainActivity : AppCompatActivity() {
         override fun run() {
             // 0.1.20: in AUX the other app changes song on its own: looked at every second
             val aux = store.mode == "aux" && ++auxTick % 4 == 0
+            if (aux) auxMeter()
+            else if (store.mode != "aux") AuxMeter.want(false)
             if (listNow.isNotEmpty() && auxTick++ % 4 == 0) listPlace()
             if (Now.version != seen || flashUntil > 0 || Now.greetUntil > 0 || Sleep.at != 0L || aux) refresh(); main.postDelayed(this, 250)
+        }
+    }
+
+    // 0.1.22: AUX's meters, asked for once (the microphone permission), on while AUX is on screen and the stereo on;
+    // told once when the tablet doesn't give the sound
+    private var auxPlayingSince = 0L
+    private var auxMeterTold = false
+    private fun micAllowed() = checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+    private fun auxMeter() {
+        if (!Aux.granted(this)) return
+        if (!micAllowed()) {
+            if (!store.askedAuxMeter) {
+                store.askedAuxMeter = true
+                toast("AUX · para que el VU y el espectro sigan lo que suena en la tablet, Android pide el permiso del micrófono (no graba nada: solo mide)", 3500)
+                requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 4)
+            }
+            return
+        }
+        AuxMeter.want(Now.power)
+        if (auxMeterTold) return
+        val silent = AuxMeter.on && auxPlayingSince > 0 && System.currentTimeMillis() - auxPlayingSince > 6000 && AuxMeter.heardAt < auxPlayingSince
+        if (AuxMeter.failed || silent) {
+            auxMeterTold = true
+            toast("AUX · esta tablet no deja medir lo que suena en la otra app: el VU y el espectro quedan quietos", 3500)
         }
     }
 
@@ -149,6 +176,7 @@ class MainActivity : AppCompatActivity() {
         if (flashUntil in 1 until now) { flash = ""; flashUntil = 0 }
         val usb = store.mode == "usb"
         val aux = if (store.mode == "aux") Aux.state(this) else null
+        if (aux?.optBoolean("playing") != true) auxPlayingSince = 0L else if (auxPlayingSince == 0L) auxPlayingSince = System.currentTimeMillis()
         state = JSONObject()
             .put("mode", store.mode).put("usb", if (usb) usbState(c) else JSONObject.NULL).put("cd", if (store.mode == "cd") cdState(c) else JSONObject.NULL)
             .put("jf", if (store.mode == "server") jfState(c) else JSONObject.NULL)
@@ -822,6 +850,11 @@ class MainActivity : AppCompatActivity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 4) {
+            if (micAllowed()) toast("AUX · el VU y el espectro siguen lo que suena en la tablet")
+            else toast("AUX · sin ese permiso el VU y el espectro quedan quietos (se activa en Ajustes → Apps → Deck 90 → Permisos → Micrófono)", 3500)
+            return
+        }
         if (requestCode == 3) {
             val hold = pendingLoc; pendingLoc = null
             if (located()) { main.post(weather); if (hold != null) loc(hold) }
@@ -848,8 +881,8 @@ class MainActivity : AppCompatActivity() {
     // what the page may ask: called on the page's own thread
     private inner class Bridge {
         @JavascriptInterface fun state(): String = state
-        @JavascriptInterface fun levels(): String = Levels.now()
-        @JavascriptInterface fun spectrum(): String = Levels.spectrumNow()
+        @JavascriptInterface fun levels(): String = if (AuxMeter.on) AuxMeter.now() else Levels.now()
+        @JavascriptInterface fun spectrum(): String = if (AuxMeter.on) AuxMeter.spectrumNow() else Levels.spectrumNow()
         @JavascriptInterface fun key(k: String, hold: Boolean) { main.post { this@MainActivity.key(k, hold) } }
         @JavascriptInterface fun version(): String = BuildConfigInfo.version
         @JavascriptInterface fun discs(): String = discsJson()

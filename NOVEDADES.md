@@ -1,5 +1,14 @@
 # Novedades
 
+## 0.1.22 — 2026-11-23
+
+### Nuevo
+- **El VU y el espectro en AUX:** ahora siguen la música de Spotify o de la app que suene. La primera vez que entrás
+  a AUX, Android pide el permiso del micrófono: no graba nada, Deck 90 mide lo que suena en la tablet. La medida es
+  más gruesa que la de la radio y va después del volumen de la tablet (con el volumen bajo, la aguja se mueve
+  menos). Si no das el permiso quedan quietos, como antes; si la tablet no entrega ese sonido, Deck 90 te avisa una
+  vez.
+
 ## 0.1.21 — 2026-11-23
 
 ### Arreglado

@@ -9,6 +9,9 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- 0.1.22: AUX's meters (Android's Visualizer of what the tablet plays: nothing is recorded) -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <!-- the temperature on DISP where the phone is (the city is enough), asked for when DISP first shows it -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <!-- the CD: a drive on USB (OTG), spoken to directly (Cd.kt); phones without USB host still install it -->

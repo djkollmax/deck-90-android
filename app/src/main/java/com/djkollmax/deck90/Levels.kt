@@ -108,7 +108,7 @@ object Levels : TeeAudioProcessor.AudioBufferSink {
         }
     }
 
-    private fun fft(re: DoubleArray, im: DoubleArray) {
+    internal fun fft(re: DoubleArray, im: DoubleArray) {   // any power of two (AuxMeter's too)
         val n = re.size
         var j = 0
         for (i in 1 until n) {

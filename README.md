@@ -53,8 +53,10 @@ Son las mismas que en la PC:
 - **MODE** pasa de la radio a **USB**, al **CD** y a **SERVER**, y de vuelta a la radio.
 - **AUX** (el botón redondo de la derecha) es la música de otra app del teléfono (Spotify, YouTube Music, un podcast):
   el display muestra el tema y la app, **SEL** la pausa o la sigue y ◀◀ ▶▶ pasan de tema. La primera vez Android pide
-  permiso (prendé Deck 90 en la lista de acceso a notificaciones: solo mira qué suena). El VU y el espectro no se mueven
-  con esa música: Android no deja que una app escuche el sonido de otra. **MODE** vuelve a la radio.
+  permiso (prendé Deck 90 en la lista de acceso a notificaciones: solo mira qué suena). Para que el VU y el espectro
+  sigan esa música pide también el del micrófono: no graba nada, mide lo que suena en el teléfono (más grueso que con
+  la radio, y después del volumen). Si no lo das, o el teléfono no entrega ese sonido, quedan quietos. **MODE** vuelve
+  a la radio.
 
 ## USB y CD
 

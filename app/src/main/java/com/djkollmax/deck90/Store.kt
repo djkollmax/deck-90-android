@@ -97,6 +97,9 @@ class Store(context: Context) {
         return la to lo
     }
     fun lastPlace(lat: Double, lon: Double) { p.edit().putString("wxLat", lat.toString()).putString("wxLon", lon.toString()).apply() }
+    var askedAuxMeter: Boolean                                     // 0.1.22: AUX's meters asked for once
+        get() = p.getBoolean("askedAuxMeter", false)
+        set(v) { p.edit().putBoolean("askedAuxMeter", v).apply() }
     var askedLocation: Boolean
         get() = p.getBoolean("askedLocation", false)
         set(v) { p.edit().putBoolean("askedLocation", v).apply() }
