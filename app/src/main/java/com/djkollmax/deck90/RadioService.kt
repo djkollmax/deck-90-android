@@ -445,7 +445,7 @@ class Resolver(private val store: Store) : ResolvingDataSource.Resolver {
         val key = st.q + "|" + st.cc
         val bad = failed.remove(key)                                 // what failed last time is tried last
         val url = (listOfNotNull(st.url.ifEmpty { null }, store.resolved(st)).filter { it != bad }.firstOrNull())
-            ?: RadioBrowser.find(st.q, st.cc).map { it.url }.firstOrNull { it != bad }
+            ?: RadioBrowser.find(st.q, st.cc).filter { RadioBrowser.fits(st.q, it.name) }.map { it.url }.firstOrNull { it != bad }   // 0.1.26: that station only
             ?: bad ?: throw IOException("no station found for " + st.q)
         if (url != st.url) store.resolvedSet(st, url)
         last[key] = url

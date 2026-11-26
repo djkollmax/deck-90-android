@@ -140,7 +140,8 @@ band, and the song the station is playing shows. Android Auto runs from the phon
 ## The stations
 
 They come from [Radio Browser](https://www.radio-browser.info), as on the PC. For each station the best quality it
-broadcasts is chosen: FLAC, then AAC or Opus, then MP3.
+broadcasts is chosen: FLAC, then AAC or Opus, then MP3. HLS stations (sent in short pieces) play too, and a memory
+plays only its own station: if it isn't found, it says so instead of playing another.
 
 ## Installing
 

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.26
+
+- The bands' stations as in deck-90 7.10.39: FM5 1–4 FluxFM, Jazzradio, Venice Classic Radio, FluxFM ChillHop (Mother
+  Earth closed); FM2 1 Urbana Play 104.3 (Con Vos answers only its site's player), Delta's HLS address, "Blue FM
+  100.7"; AM 2 AM 750 (Radio 10, same), "Continental 590". `Bands.renewed` replaces the kept ones that came with the
+  app (by name and search), in `listFromJson`.
+- HLS: `media3-exoplayer-hls`; `RadioBrowser.parse` keeps HLS (`Found.hls`); a station whose address (or last played
+  one) is `.m3u8` goes to the player as `APPLICATION_M3U8` (`Store.mime`). The playlist is read through the Resolver,
+  and its pieces are asked at the real address (Media3's ParsingLoadable uses the resolved URI).
+- `RadioBrowser.fits`: a memory looked up by name plays only an answer with every word searched in its name (or the
+  search's words together), as deck-90's `radioFits`. Tests for the three.
+
 ## 0.1.25
 
 - The pad's song keys (more than 12: CD, USB, SERVER) are sized by `padFit`, run by a ResizeObserver on the pad as

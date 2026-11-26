@@ -1,6 +1,8 @@
 package com.djkollmax.deck90
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Assert.assertNull
 import org.junit.Test
 
@@ -51,12 +53,40 @@ class RadioBrowserTest {
         assertEquals("the better of LU6's two streams", "http://a2", all.first { it.name == "LU6 Atlantica" }.url)
     }
 
-    @Test fun `streams the player can't play are left out, HLS and video`() {
+    @Test fun `video is left out, HLS plays now (0_1_26) marked as such`() {
         val found = RadioBrowser.parse("""[
           {"name":"Radio buena","url":"http://a","codec":"MP3","bitrate":128,"hls":0},
           {"name":"Segmentos","url":"http://b/x.m3u8","codec":"AAC","bitrate":64,"hls":1},
           {"name":"BBC News HD (720P)","url":"http://c","codec":"UNKNOWN","bitrate":0},
           {"name":"Canal","url":"http://d","codec":"AAC,H.264","bitrate":0}]""")
-        assertEquals(listOf("Radio buena"), found.map { it.name })
+        assertEquals(listOf("Radio buena", "Segmentos"), found.map { it.name })
+        assertEquals(listOf(false, true), found.map { it.hls })
+        assertTrue(RadioBrowser.isHls("https://live-ar1.cdnrad.com/hls/radio-1781/live.m3u8"))
+        assertTrue(RadioBrowser.isHls("http://b/x.m3u8?session=1"))
+        assertFalse(RadioBrowser.isHls("https://streams.fluxfm.de/live/mp3-320/audio/"))
+    }
+
+    @Test fun `a memory looked up by name plays only that station ("Radio 10" found a radio of Chaco)`() {
+        assertFalse(RadioBrowser.fits("Radio 10", "La Radio 104.7 FM. Resistencia Chaco"))
+        assertTrue(RadioBrowser.fits("AM750", "Radio AM 750"))
+        assertTrue(RadioBrowser.fits("AM750", "AM750"))
+        assertTrue(RadioBrowser.fits("Nacional Clasica", "Radio Nacional Clásica 96.7 FM"))
+        assertTrue(RadioBrowser.fits("Rock & Pop", "Rock And Pop FM 95.9 (Rock & Pop)"))
+        assertTrue(RadioBrowser.fits("La 100", "La 100 - 99.9 FM - Grupo Clarín"))
+        assertTrue(RadioBrowser.fits("Blue FM 100.7", "Blue FM 100.7. Ciudad de Buenos Aires"))
+        assertFalse(RadioBrowser.fits("Blue FM 100.7", "FM BLUE 92.1"))
+    }
+
+    @Test fun `the stations that stopped become their replacements, one kept by hand stays`() {
+        assertEquals("Urbana", Bands.renewed(Station("Con Vos", "89.9", "Con Vos", "AR", "https://x/old"))?.name)
+        assertEquals("AM 750", Bands.renewed(Station("Radio 10", "710", "Radio 10", "AR"))?.name)
+        assertEquals("FluxFM", Bands.renewed(Station("Mother Earth", "", "Mother Earth Radio", "DE", "https://x"))?.name)
+        assertEquals("Continental 590", Bands.renewed(Station("Continental", "590", "Radio Continental", "AR"))?.q)
+        val delta = Bands.renewed(Station("Delta", "90.3", "Delta 90.3", "AR", "https://cdn.instream.audio/:9069/stream"))!!
+        assertTrue(RadioBrowser.isHls(delta.url))
+        assertEquals(delta, Bands.renewed(delta))                     // once
+        val mine = Station("Con Vos", "", "Radio Con Vos 89.9", "AR", "https://y")
+        assertEquals(mine, Bands.renewed(mine))
+        assertEquals(listOf("FluxFM", "Jazzradio", "VeniceClassic", "ChillHop"), Bands.defaults.getValue("FM5").take(4).map { it.name })
     }
 }

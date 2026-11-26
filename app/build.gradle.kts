@@ -50,6 +50,7 @@ android {
 dependencies {
     val media3 = "1.5.1"
     implementation("androidx.media3:media3-exoplayer:$media3")
+    implementation("androidx.media3:media3-exoplayer-hls:$media3")   // 0.1.26: HLS stations (Delta, Urbana)
     implementation("androidx.media3:media3-session:$media3")
     implementation("androidx.media3:media3-datasource:$media3")
     implementation("androidx.core:core-ktx:1.15.0")

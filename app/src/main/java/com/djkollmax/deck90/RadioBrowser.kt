@@ -9,7 +9,7 @@ import java.text.Normalizer
 // A station's stream address from Radio Browser (radio-browser.info: free, no key), as Deck 90 on the PC finds it
 // (electron/main.js radioBrowser, src/core/radio.js radioBest): the host that answered last is asked first, 7 s
 // each; of the answers with the same name, the best quality first (FLAC, then Opus/AAC, then MP3, by bitrate)
-data class Found(val name: String, val url: String, val codec: String, val bitrate: Int, val cc: String = "", val place: String = "", val clicks: Int = 0) {
+data class Found(val name: String, val url: String, val codec: String, val bitrate: Int, val cc: String = "", val place: String = "", val clicks: Int = 0, val hls: Boolean = false) {
     fun toJson(): org.json.JSONObject = org.json.JSONObject().put("name", name).put("url", url).put("codec", codec)
         .put("bitrate", bitrate).put("cc", cc).put("place", place)
     fun station(): Station = Station(name, "", name.take(60), cc, url)
@@ -27,6 +27,24 @@ object RadioBrowser {
         .replace(Regex("\\b(\\d+\\s*k(bps)?|aac\\+?|mp3|flac|ogg|opus|hq|hd|hi-?fi|lossless|stream|low|high|quality)\\b"), "")
         .replace(Regex("[^a-z0-9]+"), "")
 
+    // 0.1.26: a memory looked up by name is that station: every word searched is a word of the name found ("Radio 10"
+    // found "La Radio 104.7" of Chaco and played it; radio, FM, AM and the articles don't count), or the search is some
+    // of its words written together ("AM750" is "AM 750"). As deck-90's radioFits
+    private fun tokens(s: String) = Normalizer.normalize(s.lowercase(), Normalizer.Form.NFD).replace(Regex("\\p{Mn}+"), "")
+        .split(Regex("[^a-z0-9]+")).filter { it.isNotEmpty() }
+    private val small = setOf("radio", "fm", "am", "the", "la", "el", "los", "las", "de", "del")
+    fun fits(q: String, name: String): Boolean {
+        val ws = tokens(q).filter { it !in small }; if (ws.isEmpty()) return true
+        val nw = tokens(name)
+        if (ws.all { it in nw }) return true
+        val glued = tokens(q).joinToString("")
+        for (i in nw.indices) { var run = ""; for (j in i until nw.size) { run += nw[j]; if (run == glued) return true; if (run.length >= glued.length) break } }
+        return false
+    }
+
+    // an address of an HLS station (it goes to the player as such)
+    fun isHls(url: String) = Regex("\\.m3u8(\\?|$)", RegexOption.IGNORE_CASE).containsMatchIn(url)
+
     fun best(found: List<Found>): List<Found> {
         if (found.isEmpty()) return found
         val first = base(found[0].name)
@@ -41,13 +59,13 @@ object RadioBrowser {
             val url = o.optString("url_resolved").ifBlank { o.optString("url") }
             val name = o.optString("name").trim()
             val codec = o.optString("codec")
-            // what the player can't play: playlists of segments (HLS) and video
-            val unplayable = o.optInt("hls", 0) == 1 || Regex("H\\.?26[45]|VIDEO|MP4V", RegexOption.IGNORE_CASE).containsMatchIn(codec) ||
+            // what the player can't play: video, TV. 0.1.26: HLS (playlists of short pieces) plays now
+            val unplayable = Regex("H\\.?26[45]|VIDEO|MP4V", RegexOption.IGNORE_CASE).containsMatchIn(codec) ||
                 Regex("\\b(720p|1080p|tv)\\b", RegexOption.IGNORE_CASE).containsMatchIn(name)
             if (name.isEmpty() || unplayable || !Regex("^https?://", RegexOption.IGNORE_CASE).containsMatchIn(url) || url.length >= 600) null
             else Found(name.take(80), url, codec.take(12), o.optInt("bitrate", 0),
                 o.optString("countrycode").takeIf { Regex("^[A-Z]{2}$").matches(it) } ?: "", o.optString("state").trim().take(40),
-                o.optInt("clickcount", 0))
+                o.optInt("clickcount", 0), o.optInt("hls", 0) == 1)
         }
     }
 

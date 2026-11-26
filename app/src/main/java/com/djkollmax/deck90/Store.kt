@@ -126,6 +126,10 @@ class Store(context: Context) {
         const val TUNED = "tuned"                                    // the tuned station's media id; deck90://tuned
     }
 
+    // 0.1.26: an HLS station goes to the player as a list of pieces (its address is resolved later, so the player is
+    // told now, by the address it has or played last)
+    private fun mime(st: Station): String? = if (RadioBrowser.isHls(st.url.ifEmpty { resolved(st) ?: "" })) androidx.media3.common.MimeTypes.APPLICATION_M3U8 else null
+
     // a memory as the player and Android Auto see it: its name, the band and frequency under it
     fun item(band: String, slot: Int): MediaItem? {
         val st = station(band, slot) ?: return null
@@ -133,7 +137,7 @@ class Store(context: Context) {
         val under = Bands.label(band) + " · " + slot + if (st.freq.isNotEmpty()) " · " + st.freq else ""
         return MediaItem.Builder()
             .setMediaId(mediaId(band, slot))
-            .setUri(uri(band, slot))
+            .setUri(uri(band, slot)).setMimeType(mime(st))
             .setMediaMetadata(MediaMetadata.Builder()
                 .setTitle(st.name).setArtist(under).setStation(st.name)
                 .setIsBrowsable(false).setIsPlayable(true)
@@ -144,7 +148,7 @@ class Store(context: Context) {
 
     fun tunedItem(): MediaItem? {
         val st = tuned ?: return null
-        return MediaItem.Builder().setMediaId(TUNED).setUri(Uri.parse("deck90://tuned"))
+        return MediaItem.Builder().setMediaId(TUNED).setUri(Uri.parse("deck90://tuned")).setMimeType(mime(st))
             .setMediaMetadata(MediaMetadata.Builder().setTitle(st.name).setArtist("MUNDO" + if (st.cc.isNotEmpty()) " · " + st.cc else "")
                 .setStation(st.name).setIsBrowsable(false).setIsPlayable(true)
                 .setMediaType(MediaMetadata.MEDIA_TYPE_RADIO_STATION).build())

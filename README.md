@@ -135,7 +135,8 @@ la radio. Android Auto funciona desde el celular: las tablets no lo tienen.
 ## Las radios
 
 Salen de [Radio Browser](https://www.radio-browser.info), como en la PC. De cada radio se elige la mejor calidad que
-transmite: FLAC, después AAC u Opus, después MP3.
+transmite: FLAC, después AAC u Opus, después MP3. Suenan también las que transmiten en HLS (de a pedacitos), y una
+memoria solo toca su radio: si no la encuentra, avisa en vez de poner otra.
 
 ## Instalarla
 

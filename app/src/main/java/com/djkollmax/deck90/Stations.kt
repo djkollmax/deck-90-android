@@ -32,10 +32,13 @@ object Bands {
             Station("Metro", "95.1", "Metro 95", "AR"), Station("Rock & Pop", "95.9", "Rock & Pop", "AR"),
             Station("La 100", "99.9", "La 100", "AR"), Station("Vorterix", "92.1", "Vorterix", "AR"),
         ),
+        // 0.1.26 (deck-90 7.10.39): Urbana Play instead of Con Vos (its stream answers only its own site's player now),
+        // Delta's stream is HLS, Blue is "Blue FM 100.7" in Radio Browser
         "FM2" to listOf(
-            Station("Con Vos", "89.9", "Con Vos", "AR"), Station("Clásica", "96.7", "Nacional Clasica", "AR"),
-            Station("Blackie", "89.1", "Blackie", "AR"), Station("Delta", "90.3", "Delta 90.3", "AR"),
-            Station("Blue", "100.7", "Blue 100.7", "AR"), Station("Nac Rock", "93.7", "Nacional Rock", "AR"),
+            Station("Urbana", "104.3", "Urbana Play 104.3", "AR", "https://live-ar1.cdnrad.com/hls/radio-285/live.m3u8"),
+            Station("Clásica", "96.7", "Nacional Clasica", "AR"), Station("Blackie", "89.1", "Blackie", "AR"),
+            Station("Delta", "90.3", "Delta 90.3", "AR", "https://live-ar1.cdnrad.com/hls/radio-1781/live.m3u8"),
+            Station("Blue", "100.7", "Blue FM 100.7", "AR"), Station("Nac Rock", "93.7", "Nacional Rock", "AR"),
         ),
         "FM3" to listOf(
             Station("SwissClassic", "", "Radio Swiss Classic", "CH"), Station("Swiss Jazz", "", "Radio Swiss Jazz", "CH"),
@@ -50,11 +53,13 @@ object Bands {
             Station("Linn Classic", "", "Linn Classical", "GB", "http://radio.linn.co.uk:8004/autodj"),
             Station("Linn Radio", "", "Linn Radio", "GB", "http://radio.linn.co.uk:8003/autodj"),
         ),
+        // 0.1.26: Mother Earth closed; in its four places, all at 320 kbps, FluxFM and Jazzradio (Berlin), Venice Classic
+        // Radio and FluxFM's ChillHop
         "FM5" to listOf(
-            Station("Mother Earth", "", "Mother Earth Radio", "DE", "https://motherearth.streamserver24.com/listen/motherearth/motherearth"),
-            Station("ME Jazz", "", "Mother Earth Jazz", "DE", "https://motherearth.streamserver24.com/listen/motherearth_jazz/motherearth.jazz"),
-            Station("ME Klassik", "", "Mother Earth Klassik", "DE", "http://server9.streamserver24.com:18910/motherearth.klassik"),
-            Station("ME Instrum.", "", "Mother Earth Instrumental", "DE", "https://motherearth.streamserver24.com:18920/motherearth.instrumental"),
+            Station("FluxFM", "", "FluxFM", "DE", "https://streams.fluxfm.de/live/mp3-320/audio/"),
+            Station("Jazzradio", "", "Jazzradio Berlin", "DE", "https://streams.fluxfm.de/jazzradio/mp3-320/audio/"),
+            Station("VeniceClassic", "", "Venice Classic Radio", "IT", "https://uk2.streamingpulse.com/ssl/vcr1"),
+            Station("ChillHop", "", "FluxFM ChillHop", "DE", "https://streams.fluxfm.de/Chillhop/mp3-320/audio/"),
             Station("Naim Radio", "", "Naim Radio", "GB"), Station("Jazz24", "", "Jazz24", "US"),
         ),
         "HIFI" to listOf(
@@ -66,11 +71,26 @@ object Bands {
             Station("Hi On Line", "", "Hi On Line Radio", "NL", "http://mscp2.live-streams.nl:8100/flac.flac"),
         ),
         "AM" to listOf(
-            Station("Mitre", "790", "Radio Mitre", "AR"), Station("Radio 10", "710", "Radio 10", "AR"),
-            Station("Continental", "590", "Radio Continental", "AR"), Station("Rivadavia", "630", "Rivadavia", "AR"),
+            // 0.1.26: AM 750 instead of Radio 10 (its stream answers only its own site's player now); Continental is
+            // "Continental 590" in Radio Browser
+            Station("Mitre", "790", "Radio Mitre", "AR"), Station("AM 750", "750", "AM750", "AR"),
+            Station("Continental", "590", "Continental 590", "AR"), Station("Rivadavia", "630", "Rivadavia", "AR"),
             Station("Radio Nacional", "870", "Radio Nacional", "AR"), Station("La Red", "910", "La Red", "AR"),
         ),
     )
+
+    // 0.1.26: the stations that came with the app and changed or stopped (by the name and search they came with) →
+    // what takes their place, wherever they're kept; one found and kept by hand (another search) stays
+    private val retired: List<Triple<String, String, Station>> by lazy {
+        val fm2 = defaults.getValue("FM2"); val am = defaults.getValue("AM"); val fm5 = defaults.getValue("FM5")
+        listOf(Triple("Con Vos", "Con Vos", fm2[0]), Triple("Delta", "Delta 90.3", fm2[3]), Triple("Blue", "Blue 100.7", fm2[4]),
+            Triple("Radio 10", "Radio 10", am[1]), Triple("Continental", "Radio Continental", am[2]),
+            Triple("Mother Earth", "Mother Earth Radio", fm5[0]), Triple("ME Jazz", "Mother Earth Jazz", fm5[1]),
+            Triple("ME Klassik", "Mother Earth Klassik", fm5[2]), Triple("ME Instrum.", "Mother Earth Instrumental", fm5[3]))
+    }
+    fun renewed(st: Station?): Station? = st?.let { s ->
+        retired.firstOrNull { (name, q, now) -> s.name == name && s.q == q && !(s.url.isNotEmpty() && s.url == now.url) }?.third ?: s
+    }
 
     // the band's twelve memories: what's kept, or the defaults
     fun fresh(band: String): MutableList<Station?> = MutableList(SLOTS) { i -> defaults[band]?.getOrNull(i) }
@@ -78,7 +98,7 @@ object Bands {
     fun listToJson(list: List<Station?>) = JSONArray().apply { list.forEach { put(it?.toJson() ?: JSONObject.NULL) } }
     fun listFromJson(a: JSONArray?, band: String): MutableList<Station?> {
         val out = fresh(band)
-        if (a != null) for (i in 0 until minOf(a.length(), SLOTS)) out[i] = if (a.isNull(i)) null else Station.fromJson(a.optJSONObject(i))
+        if (a != null) for (i in 0 until minOf(a.length(), SLOTS)) out[i] = if (a.isNull(i)) null else renewed(Station.fromJson(a.optJSONObject(i)))
         return out
     }
 }
