@@ -69,5 +69,12 @@ class CdTest {
         assertEquals(654321L, files[0].size)
     }
 
+    @Test fun `a pad key is a place in the disc's list, so a disc whose music starts at track 2 isn't one key off`() {
+        val all = listOf(2, 3, 4, 5)                                  // a data track first (an enhanced or mixed-mode CD)
+        assertEquals(1, Cd.at(2, all))
+        assertEquals(4, Cd.at(5, all))
+        assertEquals(0, Cd.at(1, all))                                // not on the disc: no key lit
+    }
+
     companion object { const val PC_ID = "MXsnrcgOkbb2H34IbwspNVMJMwA-" }
 }

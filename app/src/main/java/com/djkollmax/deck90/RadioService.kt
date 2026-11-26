@@ -111,6 +111,9 @@ class RadioService : MediaLibraryService() {
 
     override fun onCreate() {
         super.onCreate()
+        // 0.1.24: a CD's names (and its cover) come after it starts playing: the tracks in the player get them, so the
+        // notification, the lock screen and the car say the song and not TRACK 03
+        Cd.onNames = { main.post { cdRename() } }
         BuildConfigInfo.version = runCatching { packageManager.getPackageInfo(packageName, 0).versionName ?: "0" }.getOrDefault("0")
         store = Store(this)
         Usb.load(this)
@@ -239,6 +242,13 @@ class RadioService : MediaLibraryService() {
 
     override fun onTaskRemoved(rootIntent: android.content.Intent?) {
         if (!player.playWhenReady || player.mediaItemCount == 0) stopSelf()   // swiped away while silent: gone
+    }
+
+    private fun cdRename() {
+        if (!::player.isInitialized || player.mediaItemCount == 0 || Cd.status != "audio") return
+        val ids = (0 until player.mediaItemCount).map { player.getMediaItemAt(it).mediaId }
+        val items = ids.map { id -> Cd.parse(id)?.let { Cd.item(it) } ?: return }
+        runCatching { player.replaceMediaItems(0, items.size, items) }   // the same tracks: it goes on playing
     }
 
     override fun onDestroy() {

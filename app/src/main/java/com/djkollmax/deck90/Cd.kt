@@ -108,24 +108,44 @@ object Cd {
     }
     fun tocParam(audio: List<CdTrack>, leadout: Int): String = (listOf(audio.first().n, audio.last().n, leadout + 150) + audio.map { it.lba + 150 }).joinToString("+")
 
-    // the names, asked once per disc and kept (cd-names.json); the cover with them
+    // the names, asked once per disc and kept (cd-names.json); the cover with them. 0.1.24: asked again while the same
+    // disc is in when the answer doesn't come (no network yet, a timeout, MusicBrainz busy): the first time a disc went
+    // in, a failed ask left it as TRACK 01… until it was taken out and put in again
+    @Volatile var onNames: (() -> Unit)? = null                     // the service renames the tracks playing
+    private val RETRY = longArrayOf(0, 4_000, 12_000, 30_000, 60_000)
     private fun lookup(ctx: Context) {
         val disc = id; if (disc.isEmpty()) return
+        for (wait in RETRY) {
+            if (wait > 0) Thread.sleep(wait)
+            if (id != disc) return                                    // another disc, or none
+            when (lookupOnce(ctx, disc)) { Ask.DONE, Ask.NONE -> return; Ask.FAILED -> {} }
+        }
+    }
+    enum class Ask { DONE, NONE, FAILED }
+    private fun lookupOnce(ctx: Context, disc: String): Ask {
         val cache = File(ctx.filesDir, "cd-names.json")
         val all = runCatching { JSONObject(cache.readText()) }.getOrDefault(JSONObject())
-        var o = all.optJSONObject(disc)
+        // a disc MusicBrainz didn't know is asked again a day later (as the PC does: someone may have added it)
+        var o = all.optJSONObject(disc)?.takeIf { it.optString("album").isNotEmpty() || System.currentTimeMillis() - it.optLong("at") < 24 * 3600_000L }
         if (o == null) {
-            val t = tracks; val lead = t.last().lba + t.last().sectors
-            val j = runCatching { get("https://musicbrainz.org/ws/2/discid/" + Uri.encode(disc) + "?toc=" + tocParam(t, lead) + "&inc=recordings+artist-credits&fmt=json") }.getOrNull()
-                ?.let { JSONObject(it) } ?: return
-            o = parseNames(j, disc, t.size) ?: JSONObject().put("album", "")
+            val t = tracks.takeIf { it.isNotEmpty() } ?: return Ask.NONE; val lead = t.last().lba + t.last().sectors
+            val answer = runCatching { get("https://musicbrainz.org/ws/2/discid/" + Uri.encode(disc) + "?toc=" + tocParam(t, lead) + "&inc=recordings+artist-credits&fmt=json") }
+            if (answer.isFailure) return Ask.FAILED                   // no answer: asked again
+            val j = answer.getOrNull()?.let { runCatching { JSONObject(it) }.getOrNull() } ?: return Ask.NONE   // 404: MusicBrainz doesn't know it
+            o = parseNames(j, disc, t.size) ?: JSONObject().put("album", "").put("at", System.currentTimeMillis())
             all.put(disc, o); runCatching { cache.writeText(all.toString()) }
         }
-        if (id != disc || o.optString("album").isEmpty()) return
-        names = namesFrom(o); Now.changed()
+        if (id != disc || o.optString("album").isEmpty()) return Ask.NONE
+        names = namesFrom(o); Now.changed(); onNames?.invoke()
         o.optString("release").takeIf { Regex("^[0-9a-f-]{36}$").matches(it) }?.let { rel ->
-            runCatching { bytes("https://coverartarchive.org/release/$rel/front-250") }.getOrNull()?.takeIf { it.size in 1..600_000 }?.let { if (id == disc) { art = it; Now.changed() } }
+            for (wait in longArrayOf(0, 5_000, 20_000)) {
+                if (wait > 0) Thread.sleep(wait)
+                if (id != disc) break
+                val a = runCatching { bytes("https://coverartarchive.org/release/$rel/front-250") }
+                if (a.isSuccess) { a.getOrNull()?.takeIf { it.size in 1..600_000 }?.let { if (id == disc) { art = it; Now.changed(); onNames?.invoke() } }; break }
+            }
         }
+        return Ask.DONE
     }
     fun parseNames(j: JSONObject, disc: String, count: Int): JSONObject? {
         val rels = j.optJSONArray("releases") ?: return null
@@ -160,8 +180,9 @@ object Cd {
         connectTimeout = 12_000; readTimeout = 12_000; setRequestProperty("User-Agent", "Deck90-Android/" + BuildConfigInfo.version + " ( github.com/djkollmax/deck-90-android )")
         setRequestProperty("Accept", "application/json")
     }
-    private fun get(url: String): String? { val c = open(url); return if (c.responseCode == 404) null else c.inputStream.bufferedReader().use { it.readText() } }
-    private fun bytes(url: String): ByteArray? { val c = open(url); return if (c.responseCode != 200) null else c.inputStream.use { it.readBytes() } }
+    // 404: nothing (null); 503 and other failures throw, to be asked again (MusicBrainz answers 503 when it's busy)
+    private fun get(url: String): String? { val c = open(url); return when (c.responseCode) { 404 -> null; 200 -> c.inputStream.bufferedReader().use { it.readText() }; else -> throw IOException("HTTP " + c.responseCode) } }
+    private fun bytes(url: String): ByteArray? { val c = open(url); return when (c.responseCode) { 404 -> null; 200 -> c.inputStream.use { it.readBytes() }; else -> throw IOException("HTTP " + c.responseCode) } }
 
     // the player's items and the car's
     fun mediaId(i: Int) = if (status == "files") "cdf:$i" else "cd:$i"
@@ -183,6 +204,9 @@ object Cd {
         return MediaItem.Builder().setMediaId(mediaId(i)).setUri(if (files) "cdda://file/$i" else "cdda://track/$i").setMediaMetadata(m.build()).build()
     }
     fun numbers(): List<Int> = if (status == "files") (1..files.size).toList() else tracks.map { it.n }
+    // 0.1.24: the place of track n in the disc's list (1 for the first), which a key of the pad is: a disc whose music
+    // starts at track 2 (a data track first) had every key one track off
+    fun at(n: Int, all: List<Int> = numbers()): Int = all.indexOf(n) + 1
     fun playlist(i: Int): Pair<List<MediaItem>, Int> { val all = numbers(); return all.mapNotNull { item(it) } to all.indexOf(i).coerceAtLeast(0) }
 }
 

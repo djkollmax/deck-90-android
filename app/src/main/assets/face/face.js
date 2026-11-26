@@ -272,7 +272,7 @@ function padSync(s) {
     const sc = document.querySelector('.pad-row [data-k=scan]'); if (sc) sc.textContent = usb ? 'RAND' : 'SCAN';
   }
   if (usb) {
-    const names = s.memories || [], n = (s.usb || s.cd || s.jf || {}).n || 0;
+    const u = s.usb || s.cd || s.jf || {}, names = s.memories || [], n = (s.mode === 'cd' ? u.at : u.n) || 0;   // 0.1.24: the CD's by its place
     padKeys(Math.max(12, names.length));                              // 0.1.11: a key for every song, scrolling three rows at a time
     el('padMems').querySelectorAll('button').forEach((b, i) => {
       const x = names[i] || ''; b.querySelector('small').textContent = x || '—'; b.classList.toggle('empty', !x); b.classList.toggle('on', i + 1 === n);

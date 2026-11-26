@@ -1,5 +1,17 @@
 # Novedades
 
+## 0.1.24 — 2026-11-25
+
+### Arreglado
+- **Los nombres de los temas de un CD** ya no dependen de la primera vez: si la tablet todavía no tenía internet o
+  MusicBrainz tardaba en contestar, el disco quedaba en TRACK 01, TRACK 02… hasta sacarlo y volverlo a meter. Ahora
+  los pide de nuevo solo, mientras el disco esté puesto. Un disco que MusicBrainz no conocía se vuelve a buscar al
+  día siguiente.
+- **Los temas que ya están sonando toman los nombres** cuando llegan: la notificación, la pantalla bloqueada y el auto
+  dejan de decir TRACK 03.
+- **Las teclas de temas de abajo** con un CD que empieza en la pista 2 (los que traen una parte de datos primero)
+  estaban corridas en uno: la marcada no era la que sonaba y cada tecla tocaba la de al lado. Ahora coinciden.
+
 ## 0.1.23 — 2026-11-24
 
 ### Arreglado

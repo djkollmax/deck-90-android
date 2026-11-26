@@ -560,7 +560,7 @@ class MainActivity : AppCompatActivity() {
             k == "next" -> if (here != null && c != null) { if (c.hasNextMediaItem()) c.seekToNextMediaItem() else c.seekTo(0, 0); c.play() } else playCd(all.first())
             k == "prev" -> if (here != null && c != null) { c.seekToPrevious(); c.play() } else playCd(all.first())
             Regex("^m[1-6]$").matches(k) -> track(k[1].digitToInt() + if (hold) 6 else 0)
-            Regex("^mem(\\d{1,3})$").matches(k) -> track(k.removePrefix("mem").toInt())
+            Regex("^mem(\\d{1,3})$").matches(k) -> all.getOrNull(k.removePrefix("mem").toInt() - 1)?.let(track) ?: track(0)   // 0.1.24: the pad's keys are the list's places
             k == "scan" -> { store.usbRand = !store.usbRand; c?.shuffleModeEnabled = store.usbRand; toast(if (store.usbRand) "RAND · las pistas al azar" else "RAND · en orden") }
             k == "loc" -> {
                 store.usbRep = (store.usbRep + 1) % 3
@@ -581,6 +581,7 @@ class MainActivity : AppCompatActivity() {
         val m = if (here != null && Cd.status == "files") c?.mediaMetadata else null
         val tag = { v: CharSequence? -> v?.toString()?.trim()?.ifEmpty { null } }
         return JSONObject().put("status", Cd.status).put("files", Cd.status == "files").put("n", if (Cd.count() > 0) n else 0).put("total", Cd.count())
+            .put("at", if (Cd.count() > 0) Cd.at(n) else 0)
             .put("title", tag(m?.title) ?: if (Cd.count() > 0) Cd.title(n) else "").put("artist", tag(m?.artist) ?: if (Cd.count() > 0) Cd.artist(n) else "")
             .put("album", tag(m?.albumTitle)?.takeIf { it != "CD" } ?: Cd.names?.album ?: "").put("year", Cd.names?.year ?: "")
             .put("len", len / 1000.0).put("pos", (if (here != null) c?.currentPosition ?: 0L else 0L) / 1000.0)

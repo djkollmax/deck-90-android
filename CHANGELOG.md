@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.24
+
+- CD names: `Cd.lookup` asks MusicBrainz again while the same disc is in (after 4, 12, 30 and 60 s) when there's no
+  answer; `get` and `bytes` throw on anything but 200 and 404 (503 when MusicBrainz is busy), and the cover is asked
+  three times. A disc MusicBrainz didn't know is asked again after a day (`at`), as on the PC. The first insert used
+  to stay on TRACK nn until the disc was put in again.
+- `Cd.onNames`: the service replaces the CD's media items when the names or the cover arrive (`replaceMediaItems`,
+  same URIs, so playback goes on), for the notification and Android Auto.
+- The pad's keys in CD mode are the places in the disc's list (`Cd.at`, `cd.at` in the state, `mem` by place): a
+  disc whose audio starts at track 2 lit and played one key off. Test: `Cd.at`.
+
 ## 0.1.23
 
 - The face synced from Deck 90 7.10.38: `Deck90DotText` (dot-glyphs.js) turns characters with no glyph into what
