@@ -1,5 +1,13 @@
 # Novedades
 
+## 0.1.25 — 2026-11-25
+
+### Arreglado
+- **Las teclas de temas de abajo ya no quedan aplastadas al girar la tablet:** con un disco o una carpeta de más de
+  12 temas, girar la pantalla podía dejarlas chicas y encimadas, con el resto de la pantalla vacía, hasta el tema
+  siguiente. Ahora se acomodan solas cada vez que cambia el espacio, y en una tablet parada entran más temas a la
+  vista.
+
 ## 0.1.24 — 2026-11-25
 
 ### Arreglado

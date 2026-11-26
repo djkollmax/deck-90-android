@@ -254,11 +254,22 @@ function padKeys(count) {
     padShown = 0;
   }
   box.classList.toggle('many', count > 12);
-  if (count > 12) {                                                   // three rows and the top of a fourth: there's more below
-    const gap = parseFloat(getComputedStyle(box).rowGap) || 6, h = Math.max(132, box.clientHeight);
-    box.style.gridAutoRows = Math.floor((h - 3 * gap) / 3.28) + 'px';
-  } else box.style.gridAutoRows = '';
+  padFit();
 }
+// three rows and the top of a fourth: there's more below. 0.1.25: worked out again whenever the room changes (turning
+// the tablet, the views coming and going), not only when the song changed: turned while the room was small, the keys
+// stayed squashed, their numbers over each other, with the rest of the screen empty. Never shorter than what they hold
+function padFit() {
+  const box = el('padMems');
+  if (!box.classList.contains('many')) { if (box.style.gridAutoRows) box.style.gridAutoRows = ''; return; }
+  const h = box.clientHeight; if (!h) return;                         // hidden (VU, ESPECTRO): when it shows again
+  const gap = parseFloat(getComputedStyle(box).rowGap) || 6, first = box.children[0];
+  const need = first ? [...first.children].reduce((a, c) => a + c.offsetHeight, 0) + 4 + 12 : 44;
+  // at most 120 px: on a tall tablet more songs show at once (a phone's three rows are under it)
+  const rows = Math.max(44, need, Math.min(120, Math.floor((h - 3 * gap) / 3.28))) + 'px';
+  if (box.style.gridAutoRows !== rows) box.style.gridAutoRows = rows;
+}
+new ResizeObserver(() => padFit()).observe(el('padMems'));
 const USB_PAD = [['discprev', '◀ CARPETA'], ['discs', 'CARPETAS'], ['discnext', 'CARPETA ▶'], ['mode:radio', 'RADIO']];
 const CD_PAD = [['eject', '⏏ EXPULSAR'], ['scan', 'RAND'], ['loc', 'REP'], ['mode:radio', 'RADIO']];
 const JF_PAD = [['jfbrowse', 'MÚSICA'], ['scan', 'RAND'], ['loc', 'REP'], ['mode:radio', 'RADIO']];

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.25
+
+- The pad's song keys (more than 12: CD, USB, SERVER) are sized by `padFit`, run by a ResizeObserver on the pad as
+  well as on a new song: their height was worked out only when the display's text changed, so turning the tablet
+  while the room was small left the rows squashed and overlapping until the next song. Never shorter than what a key
+  holds; at most 120 px, so a tall tablet shows more songs at once.
+
 ## 0.1.24
 
 - CD names: `Cd.lookup` asks MusicBrainz again while the same disc is in (after 4, 12, 30 and 60 s) when there's no
