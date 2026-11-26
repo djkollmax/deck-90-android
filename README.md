@@ -1,10 +1,19 @@
 # Deck 90 para Android
 
-El estéreo de [Deck 90](https://github.com/djkollmax/deck-90) en el celular, la tablet y el auto: la radio con las
-mismas bandas y memorias que en la PC (FM1 a FM5, HI-FI y AM, doce memorias por banda) y LOCAL, las radios de donde
-estés; la música de un pendrive (USB), los CD de una lectora por USB y tu música de Jellyfin (SERVER), con las mismas
-listas que en la PC; lo que suena en otra app, como Spotify (AUX); y el frente del estéreo del auto, DP940 o doble DIN,
-con su display, sus teclas y sus looks.
+**Español** · [English](README.en.md)
+
+El estéreo de auto de los 90 de [Deck 90](https://github.com/djkollmax/deck-90), en el celular, la tablet y el auto
+(Android Auto). Gratis y de código abierto.
+
+- **La radio** con las mismas bandas y memorias que en la PC (FM1 a FM5, HI-FI y AM, doce memorias por banda), **LOCAL**
+  con las radios de donde estés y la búsqueda de radios de todo el mundo.
+- **Tu música:** un pendrive (**USB**), los **CD** de una lectora por USB, la memoria del teléfono y tu servidor
+  **Jellyfin** (**SERVER**), con las mismas listas que en la PC.
+- **AUX:** lo que suena en otra app, como Spotify o YouTube Music, en el display y con las teclas del estéreo.
+- **El frente del estéreo**, DP940 o doble DIN, con su display, sus teclas y sus 36 looks, más **VU** de aguja y un
+  **espectro** que miden lo que suena.
+
+Para instalarla, mirá [Instalarla](#instalarla): se instala y se actualiza con Obtainium.
 
 ![El celular parado: RADIO, VU y ESPECTRO](docs/celular.jpg)
 
@@ -54,12 +63,7 @@ Son las mismas que en la PC:
   minutos, y otra vez para sacarlo. Al final la radio baja sola en 10 segundos y se apaga, aunque la pantalla esté
   apagada.
 - **MODE** pasa de la radio a **USB**, al **CD** y a **SERVER**, y de vuelta a la radio.
-- **AUX** (el botón redondo de la derecha) es la música de otra app del teléfono (Spotify, YouTube Music, un podcast):
-  el display muestra el tema y la app, **SEL** la pausa o la sigue y ◀◀ ▶▶ pasan de tema. La primera vez Android pide
-  permiso (prendé Deck 90 en la lista de acceso a notificaciones: solo mira qué suena). Para que el VU y el espectro
-  sigan esa música pide también el del micrófono: no graba nada, mide lo que suena en el teléfono (más grueso que con
-  la radio, y después del volumen). Si no lo das, o el teléfono no entrega ese sonido, quedan quietos. **MODE** vuelve
-  a la radio.
+- **AUX** (el botón redondo de la derecha) pasa a la música de otra app: ver [AUX](#aux-la-música-de-otras-apps).
 
 ## USB y CD
 
@@ -68,9 +72,11 @@ Son las mismas que en la PC:
   manteniendo) van a un tema, **BAND** pasa de carpeta, **SCAN** es RAND y **LOC** es REP. El display muestra el tema,
   el artista y el disco de cada archivo, y la calidad (FLAC 24/96, MP3 320).
 - **CD:** una lectora de CD o DVD por USB (OTG). La primera vez Android pregunta si Deck 90 puede usarla. Los CD de
-  música suenan tal cual están en el disco, con los nombres y la tapa de MusicBrainz; los discos con MP3 o FLAC
-  también. **EJECT** abre la lectora. Si la lectora no arranca, le falta corriente: usá un cable en Y o un hub con
-  fuente.
+  música suenan tal cual están en el disco, con los nombres de los temas y la tapa de MusicBrainz (si no hay internet
+  cuando entra el disco, los vuelve a buscar solo); los discos con MP3 o FLAC también. Abajo, una tecla por tema.
+  **EJECT** abre la lectora. Si la lectora no arranca, le falta corriente: usá un cable en Y o un hub con fuente.
+
+![Un CD en la tablet parada: el tema que suena y una tecla por cada tema del disco](docs/cd.jpg)
 
 ## SERVER: tu música de Jellyfin
 
@@ -82,20 +88,35 @@ Para entrar de nuevo, MÚSICA → SERVIDOR.
   Jellyfin), **TELÉFONO** (TEL: toda la música de la memoria del celular o la tablet y de la tarjeta SD, de la
   biblioteca que Android ya tiene armada, con artistas, discos y tapas; la primera vez Android pide permiso para leerla)
   y **USB**. Lo que copies al teléfono aparece solo. En el auto, TEL está como **TEL · MÚSICA DEL TELÉFONO**.
-
 - **MÚSICA** (arriba de los números, o EJECT) abre las listas: **AL AZAR**, **RECIENTES**, **DISCOS**, **ARTISTAS**,
   **LO QUE SUENA**, **LISTAS** y la búsqueda, que encuentra artistas, discos y temas mientras escribís.
 - **LISTAS** son las listas de tu Jellyfin, las mismas que hacés en el DM-90 de la PC (LISTS): cada una sigue en el tema
   y el segundo donde la dejaste, en la PC o en el celular.
-![Una lista del servidor que quedó en el tema 4, AUX con Spotify y el VU, y el doble DIN parado](docs/musica-aux.jpg)
-
 - ◀◀ ▶▶ pasan de tema, 1 a 6 (y 7 a 12 manteniendo) van a un tema, **BAND** pasa de disco, **SCAN** es RAND y **LOC**
   es REP.
 - Suena en la calidad del archivo; lo que el celular no reproduce, el servidor lo manda como FLAC. Un tema que no se
   puede tocar se saltea.
 - **Fuera de casa**, con [Tailscale](https://tailscale.com) prendido en el celular y en la PC: poné como servidor la
-  dirección de Tailscale de la PC (`100.x.x.x:8096`), que anda en casa y afuera. En FLAC, una hora de música son unos
-  400 MB de datos.
+  dirección de Tailscale de la PC (`100.x.x.x:8096`), que anda en casa y afuera. Si Tailscale se cae estando en casa, Deck 90
+  prueba sola la dirección de la casa (la aprende la primera vez que se conecta). En FLAC, una hora de música son unos 400 MB de datos.
+
+![Una lista del servidor que quedó en el tema 4, AUX con Spotify y el VU, y el doble DIN parado](docs/musica-aux.jpg)
+
+## AUX: la música de otras apps
+
+El botón **AUX**, el redondo de la derecha del frente, es como la entrada auxiliar de un estéreo de verdad: muestra la
+música que suena en otra app del teléfono (Spotify, YouTube Music, un podcast) y la maneja desde el estéreo.
+
+- El display muestra el tema, el artista y la app.
+- **SEL** la pausa o la sigue, **◀◀ ▶▶** pasan de tema y **PWR** la pausa.
+- **MODE** vuelve a la radio.
+
+La primera vez Android pide dos permisos:
+
+- **Acceso a notificaciones**, para ver el reproductor de la otra app. Prendé Deck 90 en esa lista: solo mira qué suena.
+- **Micrófono**, para que el VU y el espectro sigan esa música. No graba nada: mide lo que suena en el teléfono. La
+  medida es más gruesa que con la radio y va después del volumen. Si no lo das, o el teléfono no entrega ese sonido, el
+  VU y el espectro quedan quietos.
 
 ## En la tablet
 
@@ -122,6 +143,10 @@ Con [Obtainium](https://github.com/ImranR98/Obtainium), que además la mantiene 
 
 1. En Obtainium, tocá **Agregar app** y pegá `https://github.com/djkollmax/deck-90-android`.
 2. Tocá **Agregar** y después **Instalar**. Si Play Protect avisa, elegí instalar de todas formas.
+
+Si solo querés probarla, también podés bajar el APK de la
+[última versión](https://github.com/djkollmax/deck-90-android/releases/latest) e instalarlo (así no se actualiza
+sola).
 
 Pide Android 8 o más nuevo. Las novedades de cada versión están en [NOVEDADES.md](NOVEDADES.md) y en cada
 [versión publicada](https://github.com/djkollmax/deck-90-android/releases).

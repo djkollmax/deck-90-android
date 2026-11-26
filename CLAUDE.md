@@ -2,7 +2,7 @@
 
 The radio of Deck 90 (github.com/djkollmax/deck-90, an Electron hi-fi rack for the PC) on the phone and in Android
 Auto. Damián (djkollmax) owns it and writes in Rioplatense Spanish: what the user reads (the app's texts, toasts,
-README.md) is in that Spanish; code, comments, commits and CHANGELOG.md are in English.
+README.md) is in that Spanish (README.en.md is its English twin: change both); code, comments, commits and CHANGELOG.md are in English.
 
 ## Layout
 
