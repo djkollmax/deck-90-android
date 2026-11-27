@@ -52,6 +52,12 @@
                 <action android:name="android.media.browse.MediaBrowserService" />
             </intent-filter>
         </service>
+        <!-- 0.1.27: the car's pictures (CarArt.kt): Android Auto reads them only from content:// addresses, so this
+             one is open to it. It only serves pictures, never writes -->
+        <provider
+            android:name=".ArtProvider"
+            android:authorities="com.djkollmax.deck90.art"
+            android:exported="true" />
         <!-- 0.1.20: AUX: Android shows one app the other apps' players only through a notification listener, which
              the person switches on in the phone's settings (Aux.kt). Nothing of the notifications is read -->
         <service

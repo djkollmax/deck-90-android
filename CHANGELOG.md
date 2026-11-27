@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.1.27
+
+- Android Auto: the root is three tabs, RADIO (the bands as folders, each with its first stations as subtitle), LOCALES
+  and MÚSICA (USB, CD, SERVER, TEL). Android Auto shows at most four root tabs (`BROWSER_ROOT_HINTS_KEY_ROOT_CHILDREN_LIMIT`,
+  usually 4) and the root had up to twelve children, so FM5, HI-FI, AM, LOCALES and the music could be dropped.
+- Content style hints (`MediaConstants.EXTRAS_KEY_CONTENT_STYLE_*`): memories, LOCALES, albums and DISCOS' letters as a
+  grid, the rest as lists; the root's own defaults on the `LibraryParams` returned with it (keeping `isRecent`).
+- `CarArt.kt`: the car's pictures through `ArtProvider` (content://com.djkollmax.deck90.art), since Android Auto reads
+  artwork only from content URIs and a picture sent as data in a list of twelve goes over the binder's limit. A memory,
+  a band, a letter of DISCOS and a list without its own picture get a little DP940 display drawn with the face's own
+  16-segment font (`FONT_DATA`, read from `assets/face/dp940-display.js`); the tabs and folders get Tabler icons
+  (MIT, `res/drawable-nodpi/car_*.png`, see THIRD_PARTY.md); Jellyfin's and Android's album covers, a list's picture
+  and the CD's cover are fetched once and kept in the cache. The memories' and the tuned station's items carry their
+  display as artwork (the playing screen, the notification), the songs and albums their cover's content URI
+  (`Jf.cover` stays the http address for the rest). The CD's tracks in the browse tree no longer carry the cover as
+  data (twelve covers decoded to bitmaps went over the binder's limit).
+- LISTAS in the car's SERVER (`jflists`, `jfplist:<id>`): the lists with how far each went (`EXTRAS_KEY_COMPLETION_*`,
+  from `Jf.places()`, one call), and in each SEGUIR (`jflgo:<id>`) and its songs (`jfl:<id>:<i>`), played as the whole
+  list (`listQueue`) from the place kept, not the song's album.
+- Where a list is (`Jf.placeSet`) is sent by `RadioService` (every 15 s while playing, on a pause and on a new song),
+  from `Store.jfList`, which the phone's lists and the car's set and any other queue clears; the activity's own sender
+  is gone, so it's kept with the screen off and from the car too.
+- `RadioService.menus()`, every 3 s: `notifyChildrenChanged` for MÚSICA and its folders when the USB, the CD (its
+  names and cover too), the server's sign-in or TEL's permission change, and for RADIO and the bands when a memory
+  changes.
+- Tests: `CarArtTest` (what a display says, and that the face's script still has the font).
+
 ## 0.1.26
 
 - The bands' stations as in deck-90 7.10.39: FM5 1–4 FluxFM, Jazzradio, Venice Classic Radio, FluxFM ChillHop (Mother

@@ -80,6 +80,11 @@ class Store(context: Context) {
     var jfPos: Long
         get() = p.getLong("jfPos", 0L).coerceAtLeast(0L)
         set(v) { p.edit().putLong("jfPos", v.coerceAtLeast(0L)).apply() }
+    // 0.1.27: the Jellyfin list playing (its id; "" for any other queue), so where it is goes back to Jellyfin
+    // (RadioService), from the phone or the car
+    var jfList: String
+        get() = p.getString("jfList", "") ?: ""
+        set(v) { p.edit().putString("jfList", v).apply() }
     var cdTrack: Int
         get() = p.getInt("cdTrack", 1).coerceAtLeast(1)
         set(v) { p.edit().putInt("cdTrack", v.coerceAtLeast(1)).apply() }
@@ -140,6 +145,7 @@ class Store(context: Context) {
             .setUri(uri(band, slot)).setMimeType(mime(st))
             .setMediaMetadata(MediaMetadata.Builder()
                 .setTitle(st.name).setArtist(under).setStation(st.name)
+                .setArtworkUri(CarArt.station(band, slot, st))          // 0.1.27: its little display (CarArt)
                 .setIsBrowsable(false).setIsPlayable(true)
                 .setMediaType(MediaMetadata.MEDIA_TYPE_RADIO_STATION)
                 .setExtras(extras).build())
@@ -150,7 +156,7 @@ class Store(context: Context) {
         val st = tuned ?: return null
         return MediaItem.Builder().setMediaId(TUNED).setUri(Uri.parse("deck90://tuned")).setMimeType(mime(st))
             .setMediaMetadata(MediaMetadata.Builder().setTitle(st.name).setArtist("MUNDO" + if (st.cc.isNotEmpty()) " · " + st.cc else "")
-                .setStation(st.name).setIsBrowsable(false).setIsPlayable(true)
+                .setStation(st.name).setArtworkUri(CarArt.face(CarArt.tunedFace(st))).setIsBrowsable(false).setIsPlayable(true)
                 .setMediaType(MediaMetadata.MEDIA_TYPE_RADIO_STATION).build())
             .build()
     }

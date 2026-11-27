@@ -128,9 +128,17 @@ radio.
 
 ## En el auto (Android Auto)
 
-Las bandas y sus memorias en la pantalla del auto, **RADIOS LOCALES** (las de la zona por donde va el auto) y, si
-están, **USB**, **CD** y **SERVER** con sus temas. ◀◀ ▶▶ pasan de radio dentro de la banda, y se ve el tema que pasa
-la radio. Android Auto funciona desde el celular: las tablets no lo tienen.
+Tres pestañas en la pantalla del auto:
+
+- **RADIO:** las bandas, y en cada una sus memorias en grilla, cada radio con su display del DP940 (la banda, la
+  memoria y la frecuencia).
+- **LOCALES:** las radios de la zona por donde va el auto.
+- **MÚSICA:** **USB**, **CD**, **SERVER** y **TEL** cuando están, con las tapas de los discos. En SERVER están también
+  las **LISTAS**: cada una muestra cuánto escuchaste, y **SEGUIR** sigue en el tema y el segundo donde la dejaste, en el
+  auto, en el celular o en la PC.
+
+◀◀ ▶▶ pasan de radio dentro de la banda (o de tema), y se ve el tema que pasa la radio. Si metés un CD o un pendrive,
+el menú se actualiza solo. Android Auto funciona desde el celular: las tablets no lo tienen.
 
 ## Las radios
 

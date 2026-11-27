@@ -340,6 +340,11 @@ object Jf : MusicLib {
         val r = call("GET", PREFS_PATH, who()) as? JSONObject
         r?.optJSONObject("CustomPrefs")?.optString("list:$id")?.takeIf { it.isNotEmpty() }?.let { JSONObject(it) }
     }.getOrNull()
+    // 0.1.27: where every list was left, in one call (the car's LISTAS)
+    fun places(): Map<String, JSONObject> = if (!signedIn) emptyMap() else runCatching {
+        val prefs = (call("GET", PREFS_PATH, who()) as? JSONObject)?.optJSONObject("CustomPrefs") ?: return@runCatching emptyMap<String, JSONObject>()
+        prefs.keys().asSequence().filter { it.startsWith("list:") }.mapNotNull { k -> runCatching { k.removePrefix("list:") to JSONObject(prefs.optString(k)) }.getOrNull() }.toMap()
+    }.getOrDefault(emptyMap())
     // and where it's now: read, this list's changed, written back whole (blocking; quiet when it can't)
     fun placeSet(id: String, song: String, i: Int, t: Long) {
         if (!signedIn || !ID.matches(id)) return
@@ -387,19 +392,21 @@ object Jf : MusicLib {
     // 0.1.15: and the header that carries the token (what Jellyfin asks for; ApiKey above if a redirect drops it)
     fun streamHeaders(id: String): Map<String, String> = if (Tel.mine(id) || !signedIn) emptyMap() else mapOf("Authorization" to auth())
     // an album's picture (Jellyfin serves pictures without a token)
-    fun cover(albumId: String): Uri? = if (Tel.mine(albumId)) Tel.cover(albumId) else if (signedIn && ID.matches(albumId)) Uri.parse("$server/Items/$albumId/Images/Primary?maxHeight=300&quality=85") else null
+    fun cover(albumId: String): Uri? = if (Tel.mine(albumId)) Tel.cover(albumId) else image(albumId)
+    // 0.1.27: any item's picture (a list's: the covers of its first songs, when Jellyfin made one)
+    fun image(id: String): Uri? = if (signedIn && ID.matches(id) && !Tel.mine(id)) Uri.parse("$server/Items/$id/Images/Primary?maxHeight=300&quality=85") else null
 
     // the player's items and the car's
     fun item(s: JfSong, playlist: String = ""): MediaItem = MediaItem.Builder().setMediaId("jf:${s.id}").setUri("deck90://jf/${s.id}")
         .setMediaMetadata(MediaMetadata.Builder().setTitle(s.name).setArtist(s.artist).setAlbumTitle(s.album).setAlbumArtist(s.artist)
-            .setTrackNumber(s.n.takeIf { it > 0 }).setArtworkUri(cover(s.albumId))
+            .setTrackNumber(s.n.takeIf { it > 0 }).setArtworkUri(CarArt.cover(s.albumId).takeIf { s.albumId.isNotEmpty() })
             .setIsBrowsable(false).setIsPlayable(true).setMediaType(MediaMetadata.MEDIA_TYPE_MUSIC)
             .setExtras(android.os.Bundle().apply { putString("album", s.albumId); putString("list", playlist); putInt("len", s.len)
                 putString("codec", s.codec); putInt("kbps", s.kbps); putInt("rate", s.rate); putInt("bits", s.bits) }).build())
         .build()
     fun albumItem(a: JfAlbum): MediaItem = MediaItem.Builder().setMediaId("jfalbum:${a.id}")
         .setMediaMetadata(MediaMetadata.Builder().setTitle(a.name).setSubtitle(listOf(a.artist, if (a.year > 0) a.year.toString() else "").filter { it.isNotEmpty() }.joinToString(" · "))
-            .setArtist(a.artist).setArtworkUri(cover(a.id)).setIsBrowsable(true).setIsPlayable(false).setMediaType(MediaMetadata.MEDIA_TYPE_ALBUM).build()).build()
+            .setArtist(a.artist).setArtworkUri(CarArt.cover(a.id)).setIsBrowsable(true).setIsPlayable(false).setMediaType(MediaMetadata.MEDIA_TYPE_ALBUM).build()).build()
     fun artistItem(a: JfArtist): MediaItem = MediaItem.Builder().setMediaId("jfartist:${a.id}")
         .setMediaMetadata(MediaMetadata.Builder().setTitle(a.name).setIsBrowsable(true).setIsPlayable(false).setMediaType(MediaMetadata.MEDIA_TYPE_ARTIST).build()).build()
 

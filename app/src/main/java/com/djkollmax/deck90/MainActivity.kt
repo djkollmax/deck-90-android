@@ -134,7 +134,6 @@ class MainActivity : AppCompatActivity() {
             val aux = store.mode == "aux" && ++auxTick % 4 == 0
             if (aux) auxMeter()
             else if (store.mode != "aux") AuxMeter.want(false)
-            if (listNow.isNotEmpty() && auxTick++ % 4 == 0) listPlace()
             if (Now.version != seen || flashUntil > 0 || Now.greetUntil > 0 || Sleep.at != 0L || aux) refresh(); main.postDelayed(this, 250)
         }
     }
@@ -599,7 +598,7 @@ class MainActivity : AppCompatActivity() {
         val lib = Music.now(); Thread { lib.read() }.start()
         val q = Jf.queueFrom(store.jfQueue)
         val name = if (Music.tel) "TEL · la música del teléfono" else "SERVER · " + Jf.name
-        if (q.isNotEmpty()) { playServer(q, store.jfIndex, store.jfPos); toast("MODE · $name") }
+        if (q.isNotEmpty()) { playServer(q, store.jfIndex, store.jfPos, store.jfList); toast("MODE · $name") }
         else { controller?.pause(); toast("MODE · $name · elegí qué escuchar"); jfFace("browse") }
         refresh()
     }
@@ -627,24 +626,12 @@ class MainActivity : AppCompatActivity() {
         }
         return (0 until c.mediaItemCount).mapNotNull { Jf.parse(c.getMediaItemAt(it).mediaId)?.let { id -> Jf.song(id) } }
     }
-    // 0.1.20: the list playing (its queue as it was made), and where it is, sent to Jellyfin every 15 s and on pause
-    private var listNow = ""; private var listQueue = ""; private var listSent = ""; private var listAt = 0L
-    private fun listPlace() {
-        val c = controller ?: return
-        if (listNow.isEmpty()) return
-        if (store.mode != "server" || store.jfQueue != listQueue) { listNow = ""; return }   // another queue: the list was left
-        val id = Jf.parse(c.currentMediaItem?.mediaId) ?: return
-        val t = c.currentPosition / 1000
-        val key = id + "|" + t / 15
-        if (key == listSent || (c.isPlaying && System.currentTimeMillis() - listAt < 15_000)) return
-        listSent = key; listAt = System.currentTimeMillis()
-        val list = listNow; val i = c.currentMediaItemIndex
-        Thread { Jf.placeSet(list, id, i, t) }.start()
-    }
-    private fun playServer(songs: List<JfSong>, at: Int, pos: Long = 0) {
+    // a list's id: where it is goes back to Jellyfin (0.1.27: from the service, RadioService.listPlace, so it's kept
+    // with the screen off and from the car too); any other queue: ""
+    private fun playServer(songs: List<JfSong>, at: Int, pos: Long = 0, list: String = "") {
         val c = controller ?: return
         if (songs.isEmpty()) return
-        listNow = ""                                                 // (a list sets it again after)
+        store.jfList = list
         val i = at.coerceIn(0, songs.size - 1)
         store.mode = "server"; store.jfQueue = Jf.queueJson(songs); store.jfIndex = i; store.jfPos = pos
         scanning = false; main.removeCallbacks(scan); Now.on(); Now.error = ""; Now.song = ""
@@ -671,12 +658,12 @@ class MainActivity : AppCompatActivity() {
         when {
             !Music.now().ready && !here && k in setOf("sel", "next", "prev", "band", "eject", "slot") -> notReady()
             k == "eject" || k == "slot" || k == "jfbrowse" -> jfFace("browse")
-            k == "sel" -> when { c == null -> {}; c.isPlaying -> c.pause(); here -> c.play(); q.isNotEmpty() -> playServer(q, store.jfIndex, store.jfPos); else -> jfFace("browse") }
-            k == "next" -> if (here && c != null) { if (c.hasNextMediaItem()) c.seekToNextMediaItem() else c.seekTo(0, 0); c.play() } else if (q.isNotEmpty()) playServer(q, 0)
-            k == "prev" -> if (here && c != null) { c.seekToPrevious(); c.play() } else if (q.isNotEmpty()) playServer(q, 0)
+            k == "sel" -> when { c == null -> {}; c.isPlaying -> c.pause(); here -> c.play(); q.isNotEmpty() -> playServer(q, store.jfIndex, store.jfPos, store.jfList); else -> jfFace("browse") }
+            k == "next" -> if (here && c != null) { if (c.hasNextMediaItem()) c.seekToNextMediaItem() else c.seekTo(0, 0); c.play() } else if (q.isNotEmpty()) playServer(q, 0, 0, store.jfList)
+            k == "prev" -> if (here && c != null) { c.seekToPrevious(); c.play() } else if (q.isNotEmpty()) playServer(q, 0, 0, store.jfList)
             Regex("^m[1-6]$").matches(k) || Regex("^mem(\\d{1,3})$").matches(k) -> {
                 val n = if (k.startsWith("mem")) k.removePrefix("mem").toInt() else k[1].digitToInt() + if (hold) 6 else 0
-                if (n in 1..q.size) { if (here && c != null) { c.seekTo(n - 1, 0); c.play() } else playServer(q, n - 1); toast("TRACK · " + n.toString().padStart(2, '0') + " · " + q[n - 1].name) }
+                if (n in 1..q.size) { if (here && c != null) { c.seekTo(n - 1, 0); c.play() } else playServer(q, n - 1, 0, store.jfList); toast("TRACK · " + n.toString().padStart(2, '0') + " · " + q[n - 1].name) }
                 else toast(if (q.isEmpty()) "SERVER · elegí un disco con MÚSICA" else "Suenan ${q.size} temas")
             }
             k == "band" -> jfAlbumStep(hold)
@@ -761,7 +748,7 @@ class MainActivity : AppCompatActivity() {
                 songs = Jf.listSongs(id)
                 val p = Jf.place(id); val s = songs.getOrNull(index)
                 val pos = if (p != null && s != null && p.optString("song") == s.id) p.optLong("t") * 1000 else 0L
-                main.post { if (songs.isNotEmpty()) { playServer(songs, index, pos); listNow = id; listQueue = store.jfQueue; listSent = "" } else toast("SERVER · la lista está vacía") }
+                main.post { if (songs.isNotEmpty()) playServer(songs, index, pos, id) else toast("SERVER · la lista está vacía") }
                 return@Thread
             }
             else -> return@Thread

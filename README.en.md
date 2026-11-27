@@ -133,9 +133,17 @@ radio.
 
 ## In the car (Android Auto)
 
-The bands and their memories on the car's screen, **RADIOS LOCALES** (the stations around wherever the car is) and,
-when they're there, **USB**, **CD** and **SERVER** with their songs. ◀◀ ▶▶ go to the previous or next station in the
-band, and the song the station is playing shows. Android Auto runs from the phone: tablets don't have it.
+Three tabs on the car's screen:
+
+- **RADIO:** the bands, and in each its memories as a grid, every station with its own DP940 display (the band, the
+  memory and the frequency).
+- **LOCALES:** the stations around wherever the car is.
+- **MÚSICA:** **USB**, **CD**, **SERVER** and **TEL** when they're there, with the album covers. SERVER also has the
+  **LISTAS**: each shows how much of it you've heard, and **SEGUIR** goes on from the song and the second where you left
+  it, in the car, on the phone or on the PC.
+
+◀◀ ▶▶ go to the previous or next station in the band (or song), and the song the station is playing shows. Put in a CD
+or a pendrive and the menu updates by itself. Android Auto runs from the phone: tablets don't have it.
 
 ## The stations
 

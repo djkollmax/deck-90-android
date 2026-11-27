@@ -1,5 +1,27 @@
 # Novedades
 
+## 0.1.27 — 2026-11-27
+
+### Cambiado
+- **Android Auto, reordenado en tres pestañas: RADIO, LOCALES y MÚSICA.** El auto muestra cuatro pestañas como mucho
+  y Deck 90 le mandaba hasta doce, así que FM5, HI-FI, AM, LOCALES y toda la música podían no aparecer. Ahora las bandas
+  están adentro de RADIO, y USB, CD, SERVER y TEL adentro de MÚSICA.
+- **Cada radio tiene su display:** en el auto las memorias van en grilla, cada una con un display del DP940 (el film
+  magenta y las letras de 16 segmentos) con la banda, la memoria y la frecuencia. Lo mismo en la pantalla de lo que
+  suena, en la notificación y en la pantalla bloqueada. Las bandas, las letras de DISCOS y las listas también tienen el
+  suyo, y las carpetas sus íconos.
+- **Las tapas de los discos se ven en el auto:** las del servidor, las del teléfono y la del CD, también en las listas.
+
+### Nuevo
+- **LISTAS en el auto:** en MÚSICA → SERVER están tus listas de Jellyfin, con cuánto escuchaste de cada una. Adentro,
+  **SEGUIR** sigue en el tema y el segundo donde la dejaste (en el auto, en el celular o en la PC), y tocando un tema
+  suena la lista desde ahí, no el disco.
+- Dónde quedó una lista se guarda aunque la pantalla esté apagada o la pongas desde el auto.
+
+### Arreglado
+- **El menú del auto se actualiza solo:** si metés un CD o un pendrive, entrás al servidor, llegan los nombres del CD
+  o guardás una radio en el celular, el auto lo muestra sin tener que salir y volver a entrar.
+
 ## 0.1.26 — 2026-11-26
 
 ### Cambiado
